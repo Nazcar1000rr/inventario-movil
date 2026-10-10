@@ -12,6 +12,9 @@ on:
     branches: [main]
     tags: ['v*']
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -85,3 +88,18 @@ jobs:
           name: inventario-movil-apk
           path: inventario-movil-*.apk
           retention-days: 30
+
+      # Enlace fijo para descargar desde el teléfono (sin iniciar sesión ni descomprimir):
+      # https://github.com/<usuario>/<repositorio>/releases/latest/download/inventario-movil.apk
+      - name: Publicar el APK en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}-${{ github.run_number }}"
+          cp inventario-movil-*.apk inventario-movil.apk
+          gh release create "$TAG" inventario-movil.apk \
+            --target "${{ github.sha }}" \
+            --title "Inventario Móvil ${VERSION} (compilación ${{ github.run_number }})" \
+            --notes "APK firmado. Para actualizar, instálelo encima de la versión anterior (no desinstale): así se conservan los datos." \
+            --latest
