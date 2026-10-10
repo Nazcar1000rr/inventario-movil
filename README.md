@@ -24,8 +24,8 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 | Lógica de negocio y base de datos local | ✅ 64 pruebas automáticas, todas aprobadas |
 | Interfaz | ✅ 17 pruebas de extremo a extremo en Chromium, todas aprobadas |
 | Conversión automática de los datos de la v1 | ✅ Probada con una base real de la v1 (en la capa de datos y en el navegador) y con respaldos de la v1 |
-| PWA publicada en HTTPS | Se publica con GitHub Pages en cada cambio (ver el estado de la última publicación en *Actions*) |
-| APK de Android | Se compila y firma en GitHub Actions y se publica en *Releases* en cada cambio |
+| PWA publicada en HTTPS | ✅ Versión 2.0.0 publicada con GitHub Pages (comprobado que la dirección sirve la compilación nueva). Se republica en cada cambio |
+| APK de Android | ✅ Versión 2.0.0 (compilación 6) compilada y firmada en GitHub Actions y publicada en *Releases*. Comprobado que está firmado con la misma clave que la v1 (se puede instalar encima) |
 | Clave de firma del APK | Entregada **por separado** (no está en el código) |
 | Pruebas en iPhone o Android físicos, o en Safari | ⛔ **No realizadas** (no hay dispositivos ni Safari/WebKit en este entorno). Ver la lista de verificación en docs/PRUEBAS.md |
 
