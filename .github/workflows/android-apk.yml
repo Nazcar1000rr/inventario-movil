@@ -1,0 +1,82 @@
+# Compila el APK firmado de Android en los servidores de GitHub (no requiere Android Studio).
+# Requiere 4 "secrets" en el repositorio (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64   contenido de inventario-release.jks.base64.txt
+#   ANDROID_KEYSTORE_PASSWORD contraseña del almacén (storePassword)
+#   ANDROID_KEY_ALIAS         alias de la clave (inventario)
+#   ANDROID_KEY_PASSWORD      contraseña de la clave (keyPassword)
+name: APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Comprobar que la firma está configurada
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KS" ]; then
+            echo "::error::Faltan los secrets de firma (ANDROID_KEYSTORE_BASE64, etc.). Ver docs/INSTALACION.md"
+            exit 1
+          fi
+
+      - name: Instalar dependencias y probar
+        run: |
+          npm ci
+          npm test
+
+      - name: Compilar la app web y copiarla al proyecto Android
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Restaurar el archivo de firma
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$KS" | base64 -d > android/release.jks
+
+      - name: Compilar APK de release firmado
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_FILE: release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Verificar la firma del APK
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
+          mv android/app/build/outputs/apk/release/app-release.apk "inventario-movil-$(node -p "require('./package.json').version")-${{ github.run_number }}.apk"
+
+      - name: Borrar el archivo de firma
+        if: always()
+        run: rm -f android/release.jks
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inventario-movil-apk
+          path: inventario-movil-*.apk
+          retention-days: 30

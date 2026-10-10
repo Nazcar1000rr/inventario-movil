@@ -1,0 +1,43 @@
+{
+  "name": "inventario-movil",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Gestión local de inventarios, compras, ventas y rentabilidad (PWA iOS + APK Android).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build && node scripts/build-sw.mjs",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "icons": "node scripts/make-icons.mjs",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.4",
+    "@capacitor/share": "8.0.3",
+    "dexie": "4.4.6",
+    "dexie-react-hooks": "4.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "@playwright/test": "1.56.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "fake-indexeddb": "6.2.5",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
