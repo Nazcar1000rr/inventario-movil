@@ -126,8 +126,9 @@ describe('Etapa 6: respaldo e importación', () => {
     await expectAppError(createBackup(src, { password: '123' }), 'weak_password');
     // Alterar el texto cifrado lo invalida (autenticación AES-GCM)
     const env = JSON.parse(exp.text);
-    const ct = env.ciphertext as string;
-    env.ciphertext = (ct[10] === 'A' ? 'B' : 'A') + ct.slice(1);
+    const bytes = Buffer.from(env.ciphertext as string, 'base64');
+    bytes[Math.floor(bytes.length / 2)] ^= 0x01; // cambia un solo bit
+    env.ciphertext = bytes.toString('base64');
     await expectAppError(parseBackup(JSON.stringify(env), 'clave-segura'), 'bad_password');
   });
 
