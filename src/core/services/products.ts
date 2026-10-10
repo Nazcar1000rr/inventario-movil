@@ -4,6 +4,10 @@ import type {
   ISODate,
   Inspection,
   Money,
+  PartChange,
+  PartChangedBy,
+  PartKey,
+  PartQuality,
   Product,
   ProductKind,
   Repair,
@@ -33,6 +37,8 @@ import {
   requireUnit,
 } from './base';
 import { claimOp, consumeQuantity, tx, unitCost } from './stock';
+import { applyKnownCostToMovement } from '../db';
+import { PART_KEYS, normalizeCondition, partLabel } from '../catalog';
 
 export const KIND_LABEL: Record<ProductKind, string> = {
   phone: 'Teléfono',
@@ -120,11 +126,11 @@ export async function createProduct(
       model = model || cm.model;
     }
     const name = buildProductName({ ...input, brand, model });
-    if (!name) fail('required', 'Ingrese el nombre o el modelo del producto.', 'name');
+    if (!name) fail('required', 'Escribe el nombre o el modelo del producto.', 'name');
     if (!opts.allowDuplicate) {
       const similar = await findSimilarProducts(db, input.inventoryId, name);
       if (similar.length)
-        fail('duplicate_product', `Ya existe "${similar[0].name}" en este inventario. Use el existente o confirme que es distinto.`, 'name');
+        fail('duplicate_product', `Ya existe "${similar[0].name}" en este inventario. Usa el existente o confirma que es distinto.`, 'name');
     }
     const now = nowISO();
     const p: Product = {
@@ -233,6 +239,40 @@ export interface UnitDetails {
   defects?: string;
   includedAccessories?: string;
   notes?: string;
+  /** Reparaciones o cambios de piezas conocidos al ingresar el equipo. */
+  parts?: PartInput[];
+}
+
+export interface PartInput {
+  id?: ID;
+  part: PartKey;
+  label?: string;
+  quality?: PartQuality;
+  by?: PartChangedBy;
+  date?: ISODate | null;
+  unknownPartWarning?: boolean;
+  notes?: string;
+}
+
+const QUALITIES: PartQuality[] = ['original', 'generic', 'unknown'];
+const BYS: PartChangedBy[] = ['previous_owner', 'supplier', 'me', 'unknown'];
+
+/** Valida y limpia una entrada del historial de piezas. */
+export function sanitizePart(input: PartInput, repairId: ID | null = null): PartChange {
+  if (!PART_KEYS.includes(input.part)) fail('invalid', 'Elige qué pieza se cambió o reparó.', 'part');
+  const label = cleanStr(input.label ?? '', 80);
+  if (input.part === 'other' && !label) fail('required', 'Escribe qué pieza se cambió.', 'label');
+  return {
+    id: input.id || newId(),
+    part: input.part,
+    label,
+    quality: QUALITIES.includes(input.quality as PartQuality) ? (input.quality as PartQuality) : 'unknown',
+    by: BYS.includes(input.by as PartChangedBy) ? (input.by as PartChangedBy) : 'unknown',
+    date: input.date ? assertDate(input.date, 'date', 'Fecha del cambio') : null,
+    unknownPartWarning: input.unknownPartWarning === true,
+    notes: cleanStr(input.notes ?? '', 300),
+    repairId,
+  };
 }
 
 export function validateBattery(v: unknown): number | null {
@@ -283,9 +323,10 @@ export async function insertUnit(
     serial: cleanIdentifier(d.serial),
     color: cleanStr(d.color ?? '', 40) || p.color,
     capacity: cleanStr(d.capacity ?? '', 20) || p.capacity,
-    condition: cleanStr(d.condition ?? '', 40),
+    condition: normalizeCondition(d.condition),
     batteryHealth: validateBattery(d.batteryHealth),
     inspection: null,
+    partsHistory: (d.parts ?? []).map((x) => sanitizePart(x)),
     defects: cleanStr(d.defects ?? '', 1000),
     replacedParts: '',
     includedAccessories: cleanStr(d.includedAccessories ?? '', 500),
@@ -415,7 +456,7 @@ export async function adjustQuantity(db: AppDB, input: AdjustInput): Promise<voi
   const q = assertQty(input.quantity);
   const date = assertDate(input.date, 'date', 'Fecha');
   const reason = cleanStr(input.reason, 300);
-  if (!reason) fail('required', 'Indique el motivo del ajuste.', 'reason');
+  if (!reason) fail('required', 'Escribe el motivo del ajuste.', 'reason');
   await tx(db, async () => {
     if (!(await claimOp(db, input.opId))) return;
     const p = await requireProduct(db, input.productId);
@@ -501,6 +542,7 @@ export async function updateUnitDetails(db: AppDB, unitId: ID, patch: UnitDetail
       let val: unknown = v;
       if (k === 'imei' || k === 'imei2' || k === 'serial') val = cleanIdentifier(v);
       else if (k === 'batteryHealth') val = validateBattery(v);
+      else if (k === 'condition') val = normalizeCondition(typeof v === 'string' ? v : '');
       else val = cleanStr(v, k === 'notes' || k === 'defects' ? 1000 : 200);
       if ((u as unknown as Record<string, unknown>)[k] !== val) {
         (next as unknown as Record<string, unknown>)[k] = val;
@@ -557,7 +599,7 @@ export async function setUnitBaseCost(db: AppDB, unitId: ID, baseCost: Money): P
   await tx(db, async () => {
     const u = await requireUnit(db, unitId);
     if (u.source === 'purchase')
-      fail('from_purchase', 'El costo de esta unidad viene de una compra. Para corregirlo, anule la compra y regístrela de nuevo.');
+      fail('from_purchase', 'El costo de esta unidad viene de una compra. Para corregirlo, anula la compra y regístrala de nuevo.');
     const wasUnknown = u.baseCost === null;
     if (!wasUnknown && u.status === 'sold')
       fail('sold', 'La unidad ya está vendida con un costo conocido; ese costo ya se usó en la ganancia de la venta.');
@@ -587,6 +629,14 @@ export async function setUnitBaseCost(db: AppDB, unitId: ID, baseCost: Money): P
       }
     }
     await db.units.update(unitId, { baseCost, updatedAt: nowISO() });
+    // Los movimientos de la unidad reflejan el costo nuevo (valor del inventario y capital coherentes).
+    const mvs = await db.movements.where('unitId').equals(unitId).toArray();
+    for (const m of mvs) {
+      const copy = { ...m } as unknown as Record<string, unknown>;
+      applyKnownCostToMovement(copy, baseCost);
+      if (copy.costDelta !== m.costDelta || copy.unknownDelta !== m.unknownDelta || copy.writeOff !== m.writeOff)
+        await db.movements.update(m.id, { costDelta: copy.costDelta as number, unknownDelta: copy.unknownDelta as number, writeOff: copy.writeOff as number });
+    }
     await logHistory(db, {
       entityType: 'unit',
       entityId: unitId,
@@ -602,7 +652,7 @@ export async function setUnitAcquiredAt(db: AppDB, unitId: ID, date: ISODate | n
   const d = date === null ? null : assertDate(date, 'acquiredAt', 'Fecha de ingreso');
   await tx(db, async () => {
     const u = await requireUnit(db, unitId);
-    if (u.source === 'purchase') fail('from_purchase', 'La fecha de esta unidad viene de su compra. Edite la fecha de la compra.');
+    if (u.source === 'purchase') fail('from_purchase', 'La fecha de esta unidad viene de su compra. Edita la fecha de la compra.');
     const lines = await db.saleLines.where('unitId').equals(unitId).toArray();
     if (d) {
       for (const l of lines) {
@@ -666,12 +716,14 @@ export async function setUnitStatus(db: AppDB, unitId: ID, status: 'available' |
 /** Da de baja una unidad (pérdida, robo, daño irreparable). Su costo se reconoce como pérdida. Conserva el registro y el código. */
 export async function writeOffUnit(db: AppDB, unitId: ID, reason: string, date: ISODate): Promise<void> {
   const r = cleanStr(reason, 300);
-  if (!r) fail('required', 'Indique el motivo de la baja.', 'reason');
+  if (!r) fail('required', 'Escribe el motivo de la baja.', 'reason');
   const d = assertDate(date, 'date', 'Fecha');
   await tx(db, async () => {
     const u = await requireUnit(db, unitId);
     if (!MOVABLE.includes(u.status)) fail('invalid_status', 'Solo se pueden dar de baja unidades en existencia.');
     const c = unitCost(u);
+    // Si el costo base es desconocido, igual se da de baja lo que sí se conoce (costos adicionales).
+    const known = (u.baseCost ?? 0) + u.extraCost;
     await db.units.update(unitId, { status: 'archived', archivedReason: r, updatedAt: nowISO() });
     await addMovement(db, {
       at: d,
@@ -680,9 +732,9 @@ export async function writeOffUnit(db: AppDB, unitId: ID, reason: string, date: 
       unitId,
       type: 'adjust_out',
       qtyDelta: -1,
-      costDelta: -(c ?? 0),
+      costDelta: -known,
       unknownDelta: c === null ? -1 : 0,
-      writeOff: c ?? 0,
+      writeOff: known,
       refType: 'writeoff',
       refId: null,
       notes: r,
@@ -708,6 +760,8 @@ export interface RepairInput {
   cost: Money;
   notes?: string;
   opId?: string;
+  /** Pieza cambiada en esta reparación (se agrega al historial de piezas del equipo). */
+  part?: Omit<PartInput, 'by' | 'date' | 'id'> | null;
 }
 
 /**
@@ -717,7 +771,7 @@ export interface RepairInput {
  */
 export async function addRepair(db: AppDB, input: RepairInput): Promise<Repair> {
   const desc = cleanStr(input.description, 500);
-  if (!desc) fail('required', 'Describa la reparación.', 'description');
+  if (!desc) fail('required', 'Describe la reparación.', 'description');
   const cost = assertMoney(input.cost, 'cost', 'Costo de la reparación');
   const date = assertDate(input.date, 'date', 'Fecha');
   return tx(db, async () => {
@@ -765,6 +819,11 @@ export async function addRepair(db: AppDB, input: RepairInput): Promise<Repair> 
       const rp = [u.replacedParts, repair.partsReplaced].filter(Boolean).join('; ');
       await db.units.update(u.id, { replacedParts: rp.slice(0, 1000) });
     }
+    if (input.part) {
+      const pc = sanitizePart({ ...input.part, by: 'me', date }, repair.id);
+      const fresh = (await db.units.get(u.id))!;
+      await db.units.update(u.id, { partsHistory: [...(fresh.partsHistory ?? []), pc], updatedAt: nowISO() });
+    }
     await db.repairs.add(repair);
     await logHistory(db, {
       entityType: 'unit',
@@ -774,5 +833,46 @@ export async function addRepair(db: AppDB, input: RepairInput): Promise<Repair> 
       summary: `Reparación registrada (${u.code}): ${desc}`,
     });
     return repair;
+  });
+}
+
+/* ---------------- Historial de piezas ---------------- */
+
+/** Agrega o edita una entrada del historial de piezas del equipo. No cambia costos (solo las reparaciones pagadas suman costo). */
+export async function savePartChange(db: AppDB, unitId: ID, input: PartInput): Promise<PartChange> {
+  return tx(db, async () => {
+    const u = await requireUnit(db, unitId);
+    const list = [...(u.partsHistory ?? [])];
+    const idx = input.id ? list.findIndex((p) => p.id === input.id) : -1;
+    if (input.id && idx < 0) fail('not_found', 'Ese registro de pieza ya no existe.');
+    const pc = sanitizePart(input, idx >= 0 ? list[idx].repairId : null);
+    if (idx >= 0) list[idx] = pc;
+    else list.push(pc);
+    await db.units.update(unitId, { partsHistory: list, updatedAt: nowISO() });
+    await logHistory(db, {
+      entityType: 'unit',
+      entityId: unitId,
+      inventoryId: u.inventoryId,
+      action: 'parts',
+      summary: `${idx >= 0 ? 'Pieza editada' : 'Pieza registrada'} (${u.code}): ${partLabel(pc)}`,
+    });
+    return pc;
+  });
+}
+
+export async function removePartChange(db: AppDB, unitId: ID, partId: ID): Promise<void> {
+  await tx(db, async () => {
+    const u = await requireUnit(db, unitId);
+    const list = u.partsHistory ?? [];
+    const pc = list.find((p) => p.id === partId);
+    if (!pc) return;
+    await db.units.update(unitId, { partsHistory: list.filter((p) => p.id !== partId), updatedAt: nowISO() });
+    await logHistory(db, {
+      entityType: 'unit',
+      entityId: unitId,
+      inventoryId: u.inventoryId,
+      action: 'parts',
+      summary: `Pieza quitada del historial (${u.code}): ${partLabel(pc)}`,
+    });
   });
 }

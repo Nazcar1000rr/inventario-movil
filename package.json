@@ -1,7 +1,7 @@
 {
   "name": "inventario-movil",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Gestión local de inventarios, compras, ventas y rentabilidad (PWA iOS + APK Android).",
   "type": "module",
   "scripts": {

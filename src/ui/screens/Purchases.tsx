@@ -11,6 +11,7 @@ import {
   updatePurchaseInfo,
   voidPurchase,
   type AllocationMethod,
+  type DebtKind,
   type ID,
   type Product,
 } from '../../core';
@@ -21,6 +22,7 @@ import {
   ActionMenu,
   ask,
   Card,
+  Chips,
   DateTimeInput,
   Empty,
   Field,
@@ -36,8 +38,9 @@ import {
   TextInput,
 } from '../components/ui';
 import { navigate } from '../router';
-import { db, useAction, useLive } from '../store';
-import { UnitDetailFields, type UnitDetailValue } from './Products';
+import { db, useAction, useLive, usePref } from '../store';
+import { toUnitDetails, UnitDetailFields, type UnitDetailValue } from './Products';
+import { ConditionChips } from '../components/parts';
 
 interface LineState {
   key: string;
@@ -47,9 +50,10 @@ interface LineState {
   unitPrice: number | null;
   totalPrice: number | null;
   details: Record<number, UnitDetailValue>;
+  condition: string;
 }
 
-const newLine = (product: Product | null = null): LineState => ({
+const newLine = (product: Product | null = null, condition = ''): LineState => ({
   key: newOpId(),
   product,
   qty: 1,
@@ -57,6 +61,7 @@ const newLine = (product: Product | null = null): LineState => ({
   unitPrice: null,
   totalPrice: null,
   details: {},
+  condition,
 });
 
 function linePrice(l: LineState): number | null {
@@ -71,7 +76,13 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
   const pro = current?.mode === 'pro';
   const [supplierId, setSupplierId] = useState<ID | null>(null);
   const [date, setDate] = useState<string | null>(nowISO());
-  const [lines, setLines] = useState<LineState[]>([newLine()]);
+  const [lastCondition, setLastCondition] = usePref('lastCondition', '');
+  const [lines, setLines] = useState<LineState[]>(() => [newLine(null, lastCondition)]);
+  const [source, setSource] = useState<'cash' | DebtKind>('cash');
+  const [creditor, setCreditor] = useState('');
+  const [partial, setPartial] = useState(false);
+  const [financed, setFinanced] = useState<number | null>(null);
+  const supplierName = useLive(async (d) => (supplierId ? (await d.suppliers.get(supplierId))?.name ?? '' : ''), [supplierId]);
   const [extra, setExtra] = useState<number | null>(null);
   const [allocation, setAllocation] = useState<AllocationMethod>('value');
   const [method, setMethod] = useState('');
@@ -95,15 +106,19 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
   );
   const subtotal = lines.reduce((a, l) => a + (linePrice(l) ?? 0), 0);
   const total = subtotal + (extra ?? 0);
+  const effectiveCreditor = creditor.trim() || (source === 'supplier' ? supplierName ?? '' : source === 'credit_card' ? 'Tarjeta de crédito' : '');
+  const debtAmount = source === 'cash' ? 0 : partial ? Math.min(financed ?? 0, total) : total;
 
   const validate = (): boolean => {
-    if (!current) return setErr('Seleccione el inventario de destino.');
+    if (!current) return setErr('Elige el inventario de destino.');
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
-      if (!l.product) return setErr(`Línea ${i + 1}: elija un producto.`);
-      if (!l.qty) return setErr(`Línea ${i + 1}: ingrese la cantidad.`);
-      if (linePrice(l) === null) return setErr(`Línea ${i + 1}: ingrese el precio pagado.`);
+      if (!l.product) return setErr(`Línea ${i + 1}: elige un producto.`);
+      if (!l.qty) return setErr(`Línea ${i + 1}: escribe la cantidad.`);
+      if (linePrice(l) === null) return setErr(`Línea ${i + 1}: escribe el precio pagado.`);
     }
+    if (source !== 'cash' && partial && (!financed || financed > total)) return setErr('Escribe cuánto quedó como deuda (no puede ser mayor que el total).');
+    if (source !== 'cash' && source !== 'credit_card' && !effectiveCreditor) return setErr('Escribe a quién le debes.');
     setLocalError(null);
     return true;
   };
@@ -124,11 +139,12 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
           notes,
           extraCosts: extra ?? 0,
           allocation,
+          funding: source === 'cash' ? null : { kind: source, creditor: effectiveCreditor, amount: debtAmount },
           lines: lines.map((l) => ({
             productId: l.product!.id,
             quantity: l.qty!,
             price: linePrice(l)!,
-            units: l.product!.tracking === 'unit' ? Array.from({ length: l.qty! }, (_, k) => l.details[k] ?? {}) : undefined,
+            units: l.product!.tracking === 'unit' ? Array.from({ length: l.qty! }, (_, k) => toUnitDetails(l.details[k], l.condition)) : undefined,
           })),
         }),
       'Compra registrada',
@@ -141,11 +157,11 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
   };
 
   return (
-    <Page title="Registrar compra" back={inv ? `/inventarios/${inv}` : '/'}>
+    <Page title="Registrar compra" help="purchase-form" back={inv ? `/inventarios/${inv}` : '/'}>
       {!invs ? (
         <Loading />
       ) : invs.filter((i) => !i.archived).length === 0 ? (
-        <Empty title="Primero cree un inventario">
+        <Empty title="Primero crea un inventario">
           <a className="btn primary" href="#/inventarios">
             Ir a inventarios
           </a>
@@ -165,7 +181,7 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
               inventories={invs}
               onChange={(v) => {
                 setInv(v);
-                setLines([newLine()]);
+                setLines([newLine(null, lastCondition)]);
               }}
             />
           </Field>
@@ -218,12 +234,17 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
                       <strong>{pv.unitCosts.length && Math.min(...pv.unitCosts) !== Math.max(...pv.unitCosts) ? `${formatCOP(Math.min(...pv.unitCosts))}–${formatCOP(Math.max(...pv.unitCosts))}` : formatCOP(pv.unitCosts[0] ?? 0)}</strong>
                     </p>
                   ) : null}
-                  {pro && l.product?.tracking === 'unit' && (l.qty ?? 0) > 0 ? (
+                  {l.product?.tracking === 'unit' ? (
+                    <Field label="Estado del equipo" hint="Nuevo, usado o restaurado.">
+                      <ConditionChips value={l.condition} onChange={(c) => { setLine(i, { condition: c }); setLastCondition(c); }} />
+                    </Field>
+                  ) : null}
+                  {l.product?.tracking === 'unit' && (l.qty ?? 0) > 0 ? (
                     <details className="more">
-                      <summary>IMEI, serial y estado por unidad (opcional)</summary>
+                      <summary>{pro ? 'IMEI, batería y piezas por equipo (opcional)' : 'Batería y piezas cambiadas por equipo (opcional)'}</summary>
                       <div className="stack">
                         {Array.from({ length: Math.min(l.qty ?? 0, 50) }, (_, k) => (
-                          <UnitDetailFields key={k} index={k} value={l.details[k]} onChange={(v) => setLine(i, { details: { ...l.details, [k]: v } })} />
+                          <UnitDetailFields key={k} index={k} pro={pro} generalCondition={l.condition} value={l.details[k]} onChange={(v) => setLine(i, { details: { ...l.details, [k]: v } })} />
                         ))}
                       </div>
                     </details>
@@ -232,7 +253,7 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
               </Card>
             );
           })}
-          <button type="button" className="btn" onClick={() => setLines((ls) => [...ls, newLine()])} disabled={!current}>
+          <button type="button" className="btn" onClick={() => setLines((ls) => [...ls, newLine(null, lastCondition)])} disabled={!current}>
             <Icon name="plus" /> Agregar otro producto
           </button>
 
@@ -262,6 +283,45 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
               </Field>
             </div>
           </details>
+
+          <Card title="¿Cómo la pagaste?">
+            <div className="stack">
+              <Chips
+                label="Forma de pago de la compra"
+                value={source}
+                onChange={setSource}
+                options={[
+                  ['cash', 'Con la caja'],
+                  ['credit_card', 'Tarjeta de crédito'],
+                  ['supplier', 'Crédito del proveedor'],
+                  ['loan', 'Préstamo'],
+                  ['other', 'Otra deuda'],
+                ]}
+              />
+              {source !== 'cash' ? (
+                <>
+                  <Field
+                    label={source === 'credit_card' ? 'Tarjeta (opcional)' : '¿A quién le debes?'}
+                    htmlFor="pu-cred"
+                    hint={source === 'supplier' && !creditor && supplierName ? `Se usará el proveedor: ${supplierName}` : undefined}
+                  >
+                    <TextInput id="pu-cred" value={creditor} onChange={(e) => setCreditor(e.target.value)} placeholder={source === 'credit_card' ? 'Ej.: Visa Bancolombia' : 'Nombre'} />
+                  </Field>
+                  <label className="check">
+                    <input type="checkbox" checked={partial} onChange={(e) => setPartial(e.target.checked)} /> Solo una parte quedó como deuda (el resto lo pagué de contado)
+                  </label>
+                  {partial ? (
+                    <Field label="Valor que quedó como deuda" htmlFor="pu-fin">
+                      <MoneyInput id="pu-fin" value={financed} onChange={setFinanced} />
+                    </Field>
+                  ) : null}
+                  <p className="small muted">
+                    Se creará una deuda por {formatCOP(debtAmount)} en Deudas. De la caja salen {formatCOP(total - debtAmount)}.
+                  </p>
+                </>
+              ) : null}
+            </div>
+          </Card>
 
           <Card>
             <KV
@@ -313,6 +373,12 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
               ...lines.map((l) => [`${l.qty} × ${l.product?.name}`, formatCOP(linePrice(l))] as [string, string]),
               ['Gastos adicionales', formatCOP(extra ?? 0)],
               ['Total', formatCOP(total), true],
+              ...(source !== 'cash'
+                ? ([
+                    ['Queda como deuda', `${formatCOP(debtAmount)} · ${effectiveCreditor}`],
+                    ['Sale de la caja', formatCOP(total - debtAmount)],
+                  ] as [string, string][])
+                : []),
             ]}
           />
           <p className="small muted">Se sumarán {lines.reduce((a, l) => a + (l.qty ?? 0), 0)} unidad(es) al inventario.</p>
@@ -330,7 +396,8 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
       const [inv, supplier, lines] = await Promise.all([d.inventories.get(p.inventoryId), p.supplierId ? d.suppliers.get(p.supplierId) : undefined, d.purchaseLines.where('purchaseId').equals(id).toArray()]);
       const products = await d.products.bulkGet(lines.map((l) => l.productId));
       const units = await d.units.where('purchaseId').equals(id).toArray();
-      return { p, inv: inv!, supplier, lines, products, units };
+      const debt = p.debtId ? await d.debts.get(p.debtId) : undefined;
+      return { p, inv: inv!, supplier, lines, products, units, debt };
     },
     [id],
   );
@@ -338,20 +405,25 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
   const act = useAction();
   if (data === undefined) return <Page title="Compra" back="/operaciones?tab=compras"><Loading /></Page>;
   if (data === null) return <Page title="Compra" back="/operaciones?tab=compras"><Empty title="La compra no existe" /></Page>;
-  const { p, inv, supplier, lines, products, units } = data;
+  const { p, inv, supplier, lines, products, units, debt } = data;
   const pro = inv.mode === 'pro';
   const voidIt = async () => {
     const r = await ask({
       title: 'Anular compra',
       danger: true,
-      message: <p>La compra se conserva marcada como anulada y lo comprado sale del inventario. Solo es posible si todo sigue en existencia.</p>,
+      message: (
+        <p>
+          La compra se conserva marcada como anulada y lo comprado sale del inventario. Solo es posible si todo sigue en existencia.
+          {debt ? ' La deuda de esta compra también se anula (si tiene abonos, anúlalos primero).' : ''}
+        </p>
+      ),
       input: { label: 'Motivo', required: true, placeholder: 'Ej.: registrada por error' },
       confirmText: 'Anular compra',
     });
     if (r.ok) await act.run(() => voidPurchase(db, id, r.value), 'Compra anulada');
   };
   return (
-    <Page
+    <Page help="purchase"
       title="Compra"
       subtitle={formatDateTime(p.date)}
       back="/operaciones?tab=compras"
@@ -379,6 +451,7 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
             ['Inventario', <a key="i" href={`#/inventarios/${inv.id}`}>{inv.name}</a>],
             ['Proveedor', supplier ? <a key="s" href={`#/proveedores/${supplier.id}`}>{supplier.name}</a> : 'Sin proveedor'],
             ['Método de pago', p.paymentMethod || 'Sin indicar'],
+            ['Pagada con', p.paymentSource === 'debt' && debt ? <a key="d" href={`#/deudas/${debt.id}`}>Deuda · {debt.creditor} ({formatCOP(debt.principal)})</a> : 'La caja'],
             ['Subtotal', formatCOP(p.subtotal)],
             ['Gastos adicionales', `${formatCOP(p.extraCosts)}${p.extraCosts ? (p.allocation === 'units' ? ' (igual por unidad)' : ' (según precio)') : ''}`],
             ['Total', formatCOP(p.total), true],
@@ -438,7 +511,7 @@ function EditPurchaseSheet({ id, initial, onClose }: { id: ID; initial: { notes:
         </button>
       }
     >
-      <p className="small muted">Los importes no se editan: para corregirlos, anule la compra y regístrela de nuevo.</p>
+      <p className="small muted">Los importes no se editan: para corregirlos, anula la compra y regístrala de nuevo.</p>
       <Field label="Fecha" htmlFor="ep-date" error={act.field === 'date' ? act.error : null}>
         <DateTimeInput id="ep-date" value={f.date} onChange={(v) => setF({ ...f, date: v ?? f.date })} />
       </Field>

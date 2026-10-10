@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   createInventory,
   formatCOP,
@@ -6,6 +6,7 @@ import {
   formatInt,
   getAlerts,
   getBalances,
+  getCapitalSnapshot,
   getFinancialSummary,
   getSettings,
   getSoldObservations,
@@ -14,13 +15,38 @@ import {
   type InventoryMode,
 } from '../../core';
 import { PeriodPicker, ScopeSelect, usePeriod, useScope } from '../components/common';
+import { InfoTip } from '../components/help';
+import { GettingStartedCard } from './Help';
 import { Icon } from '../components/Icon';
 import { Card, Empty, Field, FormError, Loading, Notice, Page, Segmented, TextInput } from '../components/ui';
 import { isIOS, isNative, isStandalone } from '../platform';
 import { navigate } from '../router';
 import { db, useAction, useLive } from '../store';
 
-export function Kpi({ label, value, prev, foot, money = true, invert = false, testId, text }: { label: string; value: number; prev?: number; foot?: string; money?: boolean; invert?: boolean; testId?: string; text?: string }) {
+export function Kpi({
+  label,
+  value,
+  prev,
+  foot,
+  money = true,
+  invert = false,
+  testId,
+  text,
+  info,
+  tone,
+}: {
+  label: string;
+  value: number;
+  prev?: number;
+  foot?: ReactNode;
+  money?: boolean;
+  invert?: boolean;
+  testId?: string;
+  text?: string;
+  /** Clave de la explicación ⓘ (help/content.ts → METRICS). */
+  info?: string;
+  tone?: 'good' | 'bad';
+}) {
   let delta: React.ReactNode = null;
   if (prev !== undefined) {
     const diff = value - prev;
@@ -38,8 +64,11 @@ export function Kpi({ label, value, prev, foot, money = true, invert = false, te
   }
   return (
     <div className="kpi" data-testid={testId}>
-      <div className="kpi-label">{label}</div>
-      <div className="kpi-value">{text ?? (money ? formatCOP(value) : formatInt(value))}</div>
+      <div className="kpi-label">
+        {label}
+        {info ? <InfoTip k={info} label={label} /> : null}
+      </div>
+      <div className={`kpi-value${tone === 'good' ? ' delta-up' : tone === 'bad' ? ' delta-down' : ''}`}>{text ?? (money ? formatCOP(value) : formatInt(value))}</div>
       {delta ? <div className="kpi-foot">{delta}</div> : null}
       {foot ? <div className="kpi-foot">{foot}</div> : null}
     </div>
@@ -49,9 +78,9 @@ export function Kpi({ label, value, prev, foot, money = true, invert = false, te
 function InstallHint() {
   if (isNative() || !isIOS() || isStandalone()) return null;
   return (
-    <Notice kind="warn" title="Instale la app en su pantalla de inicio">
+    <Notice kind="warn" title="Instala la app en tu pantalla de inicio">
       <p>
-        En Safari toque <strong>Compartir</strong> → <strong>Añadir a pantalla de inicio</strong>. Use siempre la app instalada: iOS puede borrar los datos de sitios
+        En Safari toca <strong>Compartir</strong> → <strong>Añadir a pantalla de inicio</strong>. Usa siempre la app instalada: iOS puede borrar los datos de sitios
         abiertos en Safari tras 7 días sin uso, y los datos de Safari y de la app instalada son independientes.
       </p>
     </Notice>
@@ -83,7 +112,7 @@ function FirstInventory() {
   if (!settings) return <Loading />;
   const m = mode ?? settings.defaultMode;
   return (
-    <Card title="Empiece creando su primer inventario">
+    <Card title="Empieza creando tu primer inventario">
       <form
         className="stack"
         onSubmit={async (e) => {
@@ -105,7 +134,10 @@ function FirstInventory() {
         <button className="btn primary block" disabled={act.busy}>
           Crear inventario
         </button>
-        <p className="small muted">Puede cambiar la modalidad cuando quiera sin perder datos. Si ya tiene un respaldo, restáurelo desde <a href="#/respaldo">Respaldo</a>.</p>
+        <p className="small muted">
+          Puedes cambiar la modalidad cuando quieras sin perder datos. Si ya tienes un respaldo, restáuralo desde <a href="#/respaldo">Respaldo</a>. ¿Quieres practicar primero? Entra al{' '}
+          <a href="#/ayuda">modo práctica</a>.
+        </p>
       </form>
     </Card>
   );
@@ -129,7 +161,8 @@ export function HomeScreen() {
         getSoldObservations(d, period.range.current, ids),
       ]);
       const vel = velocityBy(obs, () => ({ key: 'all', label: 'Todos' }))[0] ?? null;
-      return { cur, prev, bal, alerts, top, vel };
+      const cap = await getCapitalSnapshot(d, ids);
+      return { cur, prev, bal, alerts, top, vel, cap };
     },
     [key],
   );
@@ -137,6 +170,7 @@ export function HomeScreen() {
   return (
     <Page
       title="Inicio"
+      help="home"
       subtitle={settings?.businessName || undefined}
       actions={
         <button className="icon-btn" aria-label="Buscar" onClick={() => navigate('/buscar')}>
@@ -147,6 +181,7 @@ export function HomeScreen() {
       <InstallHint />
       <UpdateBanner />
       {invCount === 0 ? <FirstInventory /> : null}
+      <GettingStartedCard />
       {invCount ? (
         <>
           <div className="stack-sm">
@@ -161,32 +196,45 @@ export function HomeScreen() {
                 Actividad · {period.range.label}
               </h2>
               <div className="kpis">
-                <Kpi testId="kpi-net-revenue" label="Ingresos netos" value={data.cur.netRevenue} prev={data.prev.netRevenue} foot={`${data.cur.sales.count} venta(s) · ${data.cur.sales.units} unidad(es)`} />
-                <Kpi label="Dinero cobrado" value={data.cur.collected} prev={data.prev.collected} />
+                <Kpi testId="kpi-net-revenue" label="Ingresos netos" info="netRevenue" value={data.cur.netRevenue} prev={data.prev.netRevenue} foot={`${data.cur.sales.count} venta(s) · ${data.cur.sales.units} unidad(es)`} />
+                <Kpi label="Dinero cobrado" info="collected" value={data.cur.collected} prev={data.prev.collected} />
                 <Kpi
                   testId="kpi-gross-profit"
                   label="Ganancia bruta"
+                  info="grossProfit"
                   value={data.cur.grossProfit}
                   prev={data.prev.grossProfit}
                   foot={data.cur.profitComplete ? undefined : `⚠ Incompleta: ${data.cur.cogsUnknownUnits} unidad(es) sin costo conocido`}
                 />
-                <Kpi testId="kpi-net-profit" label="Ganancia neta" value={data.cur.netProfit} prev={data.prev.netProfit} foot={data.cur.profitComplete ? 'Después de gastos y bajas' : '⚠ Incompleta (faltan costos)'} />
-                <Kpi label="Compras" value={data.cur.purchases.total} prev={data.prev.purchases.total} invert foot={`${data.cur.purchases.units} unidad(es) compradas`} />
-                <Kpi label="Costo de lo vendido" value={data.cur.cogs} invert />
-                <Kpi label="Gastos operativos" value={data.cur.operatingExpenses} prev={data.prev.operatingExpenses} invert />
+                <Kpi testId="kpi-net-profit" label="Ganancia neta" info="netProfit" value={data.cur.netProfit} prev={data.prev.netProfit} foot={data.cur.profitComplete ? 'Después de gastos y bajas' : '⚠ Incompleta (faltan costos)'} />
+                <Kpi label="Compras" info="purchases" value={data.cur.purchases.total} prev={data.prev.purchases.total} invert foot={`${data.cur.purchases.units} unidad(es) compradas`} />
+                <Kpi label="Costo de lo vendido" info="cogs" value={data.cur.cogs} invert />
+                <Kpi label="Gastos operativos" info="operatingExpenses" value={data.cur.operatingExpenses} prev={data.prev.operatingExpenses} invert />
                 {data.cur.returns.count ? <Kpi label="Devoluciones" value={data.cur.returns.amount} foot={`${data.cur.returns.units} unidad(es)`} invert /> : null}
               </div>
               <p className="tiny muted">Comparación: {period.range.previousLabel}. Las ganancias solo cuentan productos vendidos; lo que sigue en inventario no es ganancia.</p>
 
               <h2 className="section-title">Saldos a hoy</h2>
               <div className="kpis">
-                <Kpi testId="kpi-receivables" label="Por cobrar" value={data.bal.receivables} foot={`${data.bal.receivableSales} venta(s) con saldo`} />
+                <a href="#/capital" className="kpi-link" aria-label="Ver capital">
+                  <Kpi testId="kpi-home-value" label="Valor del negocio" info="businessValue" value={data.cap.businessValue} foot="Ver capital →" />
+                </a>
+                <a href="#/capital" className="kpi-link" aria-label="Ver crecimiento">
+                  <Kpi
+                    label="Crecimiento"
+                    info="growth"
+                    value={data.cap.growth}
+                    tone={data.cap.growth > 0 ? 'good' : data.cap.growth < 0 ? 'bad' : undefined}
+                    foot={data.cap.netCapital > 0 ? `Sobre ${formatCOP(data.cap.netCapital)} aportados` : 'Registra tu capital en Capital'}
+                  />
+                </a>
+                <Kpi testId="kpi-receivables" label="Por cobrar" info="receivables" value={data.bal.receivables} foot={`${data.bal.receivableSales} venta(s) con saldo`} />
                 <Kpi testId="kpi-stock" label="Existencias disponibles" value={data.bal.available} money={false} foot={data.bal.inReview + data.bal.damaged ? `+${data.bal.inReview} en revisión, ${data.bal.damaged} dañadas` : undefined} />
-                <Kpi testId="kpi-stock-value" label="Valor a costo" value={data.bal.stockValue} foot={data.bal.unknownCostCount ? `⚠ ${data.bal.unknownCostCount} unidad(es) sin costo no incluidas` : 'Costo de lo disponible'} />
-                <Kpi label="Días promedio hasta vender" value={data.vel?.avgDays ?? 0} text={data.vel?.avgDays == null ? '—' : String(data.vel.avgDays).replace('.', ',')} money={false} foot={data.vel?.count ? `${data.vel.count} venta(s) con fecha conocida` : 'Sin datos suficientes'} />
+                <Kpi testId="kpi-stock-value" label="Valor a costo" info="stockValue" value={data.bal.stockValue} foot={data.bal.unknownCostCount ? `⚠ ${data.bal.unknownCostCount} unidad(es) sin costo no incluidas` : 'Costo de lo disponible'} />
+                <Kpi label="Días promedio hasta vender" info="avgDaysToSell" value={data.vel?.avgDays ?? 0} text={data.vel?.avgDays == null ? '—' : String(data.vel.avgDays).replace('.', ',')} money={false} foot={data.vel?.count ? `${data.vel.count} venta(s) con fecha conocida` : 'Sin datos suficientes'} />
               </div>
 
-              <AlertsCard alerts={data.alerts} staleDays={settings?.staleDays ?? 60} alertDays={settings?.warrantyAlertDays ?? 15} />
+              <AlertsCard alerts={data.alerts} alertDays={settings?.warrantyAlertDays ?? 15} />
 
               <Card title="Más vendidos del periodo" action={<a href="#/informes" className="small">Informes</a>}>
                 {data.top.length === 0 ? (
@@ -225,18 +273,25 @@ export function HomeScreen() {
   );
 }
 
-function AlertsCard({ alerts, staleDays, alertDays }: { alerts: Awaited<ReturnType<typeof getAlerts>>; staleDays: number; alertDays: number }) {
+function AlertsCard({ alerts, alertDays }: { alerts: Awaited<ReturnType<typeof getAlerts>>; alertDays: number }) {
   const items: { kind: 'warn' | 'bad' | 'info'; text: string; href?: string }[] = [];
   if (alerts.backupDue)
     items.push({
       kind: 'warn',
-      text: alerts.lastBackupAt ? `Último respaldo: ${formatDate(alerts.lastBackupAt)}. Haga uno nuevo.` : 'Aún no ha hecho ningún respaldo de sus datos.',
+      text: alerts.lastBackupAt ? `Último respaldo: ${formatDate(alerts.lastBackupAt)}. Haz uno nuevo.` : 'Aún no has hecho ningún respaldo de tus datos.',
       href: '/respaldo',
     });
   for (const l of alerts.lowStock.slice(0, 5))
     items.push({ kind: l.available === 0 ? 'bad' : 'warn', text: `${l.available === 0 ? 'Agotado' : 'Stock bajo'}: ${l.name} (${l.available} disponible(s))`, href: `/productos/${l.productId}` });
   if (alerts.lowStock.length > 5) items.push({ kind: 'warn', text: `…y ${alerts.lowStock.length - 5} producto(s) más con stock bajo` });
-  if (alerts.stale.length) items.push({ kind: 'info', text: `${alerts.stale.reduce((a, s) => a + s.qty, 0)} unidad(es) llevan ${staleDays} días o más sin venderse`, href: '/informes?tab=tiempos' });
+  if (alerts.stale.length) {
+    const days = [...new Set(alerts.stale.map((s) => s.staleDays))].filter((x) => x !== null).sort((a, b) => a! - b!);
+    items.push({
+      kind: 'info',
+      text: `${alerts.stale.reduce((a, s) => a + s.qty, 0)} unidad(es) llevan ${days.length === 1 ? `${days[0]} días o más` : 'más días de lo esperado'} sin venderse`,
+      href: '/informes?tab=tiempos',
+    });
+  }
   if (alerts.warrantiesExpiring.length) items.push({ kind: 'info', text: `${alerts.warrantiesExpiring.length} garantía(s) vencen en los próximos ${alertDays} días`, href: '/garantias' });
   if (alerts.openClaims) items.push({ kind: 'warn', text: `${alerts.openClaims} reclamo(s) de garantía pendientes`, href: '/garantias' });
   if (alerts.receivables.count) items.push({ kind: 'info', text: `${alerts.receivables.count} venta(s) con saldo por cobrar: ${formatCOP(alerts.receivables.amount)}`, href: '/operaciones?tab=ventas&f=pendientes' });

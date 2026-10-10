@@ -2,8 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   addPayment,
   addRefund,
+  checkPrice,
   computeSaleBalance,
   createSale,
+  estimatePaymentFee,
+  feePercentFor,
+  getProductPricing,
+  getSettings,
+  getUnitPricing,
   EXPENSE_CATEGORIES,
   fifoOrder,
   formatCOP,
@@ -47,6 +53,7 @@ import {
 } from '../components/ui';
 import { navigate } from '../router';
 import { db, useAction, useLive } from '../store';
+import { L } from '../components/help';
 
 interface SLine {
   key: string;
@@ -76,6 +83,9 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
   const [payMode, setPayMode] = useState<'full' | 'partial' | 'pending'>('full');
   const [partial, setPartial] = useState<number | null>(null);
   const [method, setMethod] = useState('Efectivo');
+  const [feeOverride, setFeeOverride] = useState<number | null>(null);
+  const [feeEdit, setFeeEdit] = useState(false);
+  const settings = useLive((d) => getSettings(d));
   const [customerId, setCustomerId] = useState<ID | null>(null);
   const [costs, setCosts] = useState<{ category: string; amount: number | null }[]>([]);
   const [warrantyOn, setWarrantyOn] = useState(false);
@@ -134,6 +144,9 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
   const total = Math.max(0, subtotal - (discount ?? 0));
   const initialPayment = payMode === 'full' ? total : payMode === 'partial' ? partial ?? 0 : 0;
   const costsTotal = costs.reduce((a, c) => a + (c.amount ?? 0), 0);
+  const feePct = settings && payMode !== 'pending' ? feePercentFor(settings.paymentFees, method) : 0;
+  const feeAuto = settings && payMode !== 'pending' ? estimatePaymentFee(settings.paymentFees, method, initialPayment) : 0;
+  const fee = payMode === 'pending' ? 0 : feeEdit ? feeOverride ?? 0 : feeAuto;
 
   // Costo estimado de lo vendido
   const est = useMemo(() => {
@@ -164,14 +177,14 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
       setLocalError(m);
       return false;
     };
-    if (!current) return fail('Seleccione el inventario de origen.');
+    if (!current) return fail('Elige el inventario de origen.');
     const used = new Map<ID, number>();
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
-      if (!l.product) return fail(`Línea ${i + 1}: elija un producto.`);
+      if (!l.product) return fail(`Línea ${i + 1}: elige un producto.`);
       const q = qtyOf(l);
-      if (!q) return fail(`Línea ${i + 1}: ingrese la cantidad.`);
-      if (l.price === null) return fail(`Línea ${i + 1}: ingrese el precio de venta.`);
+      if (!q) return fail(`Línea ${i + 1}: escribe la cantidad.`);
+      if (l.price === null) return fail(`Línea ${i + 1}: escribe el precio de venta.`);
       used.set(l.product.id, (used.get(l.product.id) ?? 0) + q);
     }
     for (const [pid, q] of used) {
@@ -179,7 +192,8 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
       if (s && q > s.available) return fail(`Stock insuficiente: hay ${s.available} disponible(s) de "${lines.find((l) => l.product?.id === pid)?.product?.name}".`);
     }
     if ((discount ?? 0) > subtotal) return fail('El descuento no puede ser mayor que el subtotal.');
-    if (payMode === 'partial' && (partial === null || partial <= 0 || partial >= total)) return fail('Para pago parcial, ingrese un valor mayor que 0 y menor que el total.');
+    if (payMode === 'partial' && (partial === null || partial <= 0 || partial >= total)) return fail('Para pago parcial, escribe un valor mayor que 0 y menor que el total.');
+    if (feeEdit && (feeOverride ?? 0) > initialPayment) return fail('La comisión no puede ser mayor que el pago.');
     setLocalError(null);
     return true;
   };
@@ -198,6 +212,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
           deliveryStatus: delivery,
           lines: lines.map((l) => ({ productId: l.product!.id, quantity: l.unitIds.length ? undefined : l.qty ?? 0, unitIds: l.unitIds.length ? l.unitIds : undefined, unitPrice: l.price ?? 0 })),
           initialPayment,
+          initialPaymentFee: feeEdit ? feeOverride ?? 0 : undefined,
           costs: costs.filter((c) => (c.amount ?? 0) > 0).map((c) => ({ category: c.category, amount: c.amount ?? 0 })),
           warranty: warrantyOn ? { durationValue: wValue ?? 0, durationUnit: wUnit, conditions: wCond } : null,
         }),
@@ -211,11 +226,11 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
   };
 
   return (
-    <Page title="Registrar venta" back={inv ? `/inventarios/${inv}` : '/'}>
+    <Page title="Registrar venta" help="sale-form" back={inv ? `/inventarios/${inv}` : '/'}>
       {!invs ? (
         <Loading />
       ) : invs.filter((i) => !i.archived).length === 0 ? (
-        <Empty title="Primero cree un inventario">
+        <Empty title="Primero crea un inventario">
           <a className="btn primary" href="#/inventarios">
             Ir a inventarios
           </a>
@@ -272,6 +287,15 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
                       <MoneyInput id={`sa-p-${i}`} value={l.price} onChange={(v) => setLine(i, { price: v })} />
                     </Field>
                   </div>
+                  {l.product ? (
+                    <PriceHints
+                      productId={l.product.id}
+                      unitId={isUnit ? (l.unitIds[0] ?? s?.unitIds[0] ?? null) : null}
+                      several={isUnit && qtyOf(l) > 1}
+                      price={l.price}
+                      onUse={(v) => setLine(i, { price: v })}
+                    />
+                  ) : null}
                   {isUnit ? (
                     <div className="stack-sm">
                       <button type="button" className="btn sm" onClick={() => setUnitPicking(i)}>
@@ -287,7 +311,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
                           ))}
                         </div>
                       ) : (
-                        <span className="tiny muted">Si no elige, se venden las unidades más antiguas primero.</span>
+                        <span className="tiny muted">Si no eliges, se venden las unidades más antiguas primero.</span>
                       )}
                     </div>
                   ) : null}
@@ -320,6 +344,9 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
               </select>
             </Field>
           ) : null}
+          {payMode !== 'pending' && (feePct > 0 || feeEdit) ? (
+            <FeeBox method={method} pct={feePct} fee={fee} edit={feeEdit} onEdit={(on) => { setFeeEdit(on); setFeeOverride(feeAuto); }} value={feeOverride} onChange={setFeeOverride} />
+          ) : null}
 
           <details className="more" open={pro}>
             <summary>Comprador, garantía, gastos y notas (opcional)</summary>
@@ -327,7 +354,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
               <PartyField type="customer" value={customerId} onChange={setCustomerId} />
               <div className="field">
                 <span className="field-label">Gastos de esta venta</span>
-                <span className="hint">Comisiones, envío pagado por usted… Se restan en la ganancia neta.</span>
+                <span className="hint">Envío que pagas tú, comisión de un vendedor… Se restan en la ganancia neta. La comisión del datáfono se calcula sola.</span>
                 {costs.map((c, k) => (
                   <div key={k} className="row">
                     <select className="select" aria-label="Categoría del gasto" style={{ maxWidth: '45%' }} value={c.category} onChange={(e) => setCosts((cs) => cs.map((x, j) => (j === k ? { ...x, category: e.target.value } : x)))}>
@@ -385,14 +412,17 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
                 ['Total de la venta', formatCOP(total), true],
                 ['Recibido ahora', formatCOP(initialPayment)],
                 ['Queda por cobrar', formatCOP(Math.max(0, total - initialPayment))],
+                ...(fee ? ([['Comisión del medio de pago', formatCOP(fee)]] as [string, string][]) : []),
                 [
                   'Ganancia estimada',
                   est.unknown ? (
                     <span key="g">
-                      {formatCOP(total - est.cost - costsTotal)} <Badge kind="warn">⚠ {est.unknown} sin costo</Badge>
+                      {formatCOP(total - est.cost - costsTotal - fee)} <Badge kind="warn">⚠ {est.unknown} sin costo</Badge>
                     </span>
                   ) : (
-                    formatCOP(total - est.cost - costsTotal)
+                    <span key="g" className={total - est.cost - costsTotal - fee < 0 ? 'delta-down' : undefined}>
+                      {formatCOP(total - est.cost - costsTotal - fee)}
+                    </span>
                   ),
                 ],
               ]}
@@ -451,8 +481,15 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
               ['Descuento', formatCOP(discount ?? 0)],
               ['Total', formatCOP(total), true],
               ['Pago', payMode === 'full' ? `Completo (${method})` : payMode === 'partial' ? `Parcial: ${formatCOP(initialPayment)}` : 'Pendiente'],
+              ...(fee ? ([['Comisión (gasto)', formatCOP(fee)]] as [string, string][]) : []),
+              ['Ganancia estimada', est.unknown ? `${formatCOP(total - est.cost - costsTotal - fee)} (incompleta)` : formatCOP(total - est.cost - costsTotal - fee)],
             ]}
           />
+          {!est.unknown && total - est.cost < 0 ? (
+            <Notice kind="bad" title="Vendes por debajo del costo">
+              Perderías {formatCOP(est.cost - total)} en esta venta.
+            </Notice>
+          ) : null}
         </Sheet>
       ) : null}
     </Page>
@@ -500,7 +537,7 @@ export function SaleDetailScreen({ id }: { id: ID }) {
       danger: true,
       message: (
         <p>
-          Use esto solo si la venta se registró por error. Se conservará marcada como anulada, lo vendido vuelve a existencia y deja de contar en ingresos, costos y cobros. Para una devolución real del cliente, use "Registrar devolución".
+          Usa esto solo si la venta se registró por error. Se conservará marcada como anulada, lo vendido vuelve a existencia y deja de contar en ingresos, costos y cobros. Para una devolución real del cliente, use "Registrar devolución".
         </p>
       ),
       input: { label: 'Motivo', required: true },
@@ -510,7 +547,7 @@ export function SaleDetailScreen({ id }: { id: ID }) {
   };
 
   return (
-    <Page
+    <Page help="sale"
       title="Venta"
       subtitle={formatDateTime(sale.date)}
       back="/operaciones?tab=ventas"
@@ -698,15 +735,24 @@ function PaymentSheet({ sale, kind, max, onClose }: { sale: Sale; kind: 'payment
   const [method, setMethod] = useState('Efectivo');
   const [notes, setNotes] = useState('');
   const [opId] = useState(newOpId);
+  const [feeEdit, setFeeEdit] = useState(false);
+  const [feeOverride, setFeeOverride] = useState<number | null>(null);
+  const settings = useLive((d) => getSettings(d));
   const act = useAction();
+  const feePct = kind === 'payment' && settings ? feePercentFor(settings.paymentFees, method) : 0;
+  const feeAuto = kind === 'payment' && settings ? estimatePaymentFee(settings.paymentFees, method, amount ?? 0) : 0;
+  const fee = feeEdit ? feeOverride ?? 0 : feeAuto;
   return (
     <Sheet title={kind === 'payment' ? 'Registrar pago' : 'Registrar reembolso'} onClose={onClose}>
       <form
         className="stack"
         onSubmit={async (e) => {
           e.preventDefault();
-          const fn = kind === 'payment' ? addPayment : addRefund;
-          const ok = await act.run(() => fn(db, { opId, saleId: sale.id, amount: amount ?? 0, date: date ?? '', method, notes }).then(() => true), kind === 'payment' ? 'Pago registrado' : 'Reembolso registrado');
+          const input = { opId, saleId: sale.id, amount: amount ?? 0, date: date ?? '', method, notes };
+          const ok = await act.run(
+            () => (kind === 'payment' ? addPayment(db, { ...input, fee: feeEdit ? feeOverride ?? 0 : undefined }) : addRefund(db, input)).then(() => true),
+            kind === 'payment' ? 'Pago registrado' : 'Reembolso registrado',
+          );
           if (ok) onClose();
         }}
       >
@@ -725,6 +771,9 @@ function PaymentSheet({ sale, kind, max, onClose }: { sale: Sale; kind: 'payment
             <DateTimeInput id="pay-date" value={date} onChange={setDate} />
           </Field>
         </div>
+        {kind === 'payment' && (feePct > 0 || feeEdit) ? (
+          <FeeBox method={method} pct={feePct} fee={fee} edit={feeEdit} onEdit={(on) => { setFeeEdit(on); setFeeOverride(feeAuto); }} value={feeOverride} onChange={setFeeOverride} />
+        ) : null}
         <Field label="Nota (opcional)" htmlFor="pay-notes">
           <TextInput id="pay-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
@@ -797,7 +846,7 @@ function ReturnSheet({
         </button>
       }
     >
-      <p className="small muted">La venta original se conserva. Elija qué vuelve y en qué estado queda.</p>
+      <p className="small muted">La venta original se conserva. Elige qué vuelve y en qué estado queda.</p>
       {open.map((l) => {
         const p = products.get(l.productId);
         const s = sel[l.id];
@@ -889,7 +938,7 @@ function EditSaleSheet({ sale, onClose }: { sale: Sale; onClose: () => void }) {
         </button>
       }
     >
-      <p className="small muted">Los importes no se editan: use pagos, devoluciones o anulación para que todo quede trazable.</p>
+      <p className="small muted">Los importes no se editan: usa pagos, devoluciones o anulación para que todo quede trazable.</p>
       <PartyField type="customer" value={customerId} onChange={setCustomerId} />
       <Field label="Entrega">
         <Segmented label="Estado de entrega" value={delivery} onChange={setDelivery} options={[['na', 'No aplica'], ['pending', 'Pendiente'], ['delivered', 'Entregado']]} />
@@ -907,5 +956,53 @@ function EditSaleSheet({ sale, onClose }: { sale: Sale; onClose: () => void }) {
       </Field>
       <FormError error={act.error} />
     </Sheet>
+  );
+}
+
+/** Comisión del medio de pago (calculada con el % de Configuración y editable). */
+function FeeBox({ method, pct, fee, edit, onEdit, value, onChange }: { method: string; pct: number; fee: number; edit: boolean; onEdit: (on: boolean) => void; value: number | null; onChange: (v: number | null) => void }) {
+  return (
+    <div className="stack-sm" data-testid="fee-box">
+      <p className="small">
+        <L k="paymentFee">Comisión de {method}</L>
+        {pct ? ` (${String(pct).replace('.', ',')} %)` : ''}: <strong>{formatCOP(fee)}</strong> · se registra como gasto.
+      </p>
+      <label className="check">
+        <input type="checkbox" checked={edit} onChange={(e) => onEdit(e.target.checked)} /> Cambiar el valor de la comisión
+      </label>
+      {edit ? <MoneyInput ariaLabel="Valor de la comisión" value={value} onChange={onChange} /> : null}
+    </div>
+  );
+}
+
+/** Ayuda de precio al vender: costo, mínimo, mercado, tu precio real, sugerido y avisos. */
+function PriceHints({ productId, unitId, several, price, onUse }: { productId: ID; unitId: ID | null; several: boolean; price: number | null; onUse: (v: number) => void }) {
+  const info = useLive((d) => (unitId ? getUnitPricing(d, unitId) : getProductPricing(d, productId)), [productId, unitId]);
+  if (!info) return null;
+  const chk = price !== null ? checkPrice(price, info) : null;
+  const parts: string[] = [];
+  if (info.cost !== null) parts.push(`Costo ${formatCOP(info.cost)}`);
+  if (info.minPrice !== null) parts.push(`Mínimo ${formatCOP(info.minPrice)}`);
+  if (info.market) parts.push(`Mercado ${formatCOP(info.market.price)}${info.market.stale ? ' (desactualizado)' : ''}`);
+  if (info.recent) parts.push(`Tu precio real ${formatCOP(info.recent.avg)}`);
+  return (
+    <div className="price-hints stack-sm" data-testid="price-hints">
+      {parts.length ? (
+        <p className="tiny muted">
+          {parts.join(' · ')}
+          {several ? ' (primer equipo)' : ''}
+        </p>
+      ) : null}
+      {info.suggested !== null && info.suggested !== price ? (
+        <button type="button" className="btn sm" onClick={() => onUse(info.suggested!)}>
+          Usar sugerido: {formatCOP(info.suggested)}
+        </button>
+      ) : null}
+      {chk?.belowCost ? (
+        <Notice kind="bad">Este precio está por debajo del costo: perderías {formatCOP(-(chk.profit ?? 0))} por equipo.</Notice>
+      ) : chk?.belowMin ? (
+        <Notice kind="warn">Este precio está por debajo de tu mínimo ({formatCOP(info.minPrice)}). Ganarías {formatCOP(chk.profit)}.</Notice>
+      ) : null}
+    </div>
   );
 }

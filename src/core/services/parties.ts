@@ -29,7 +29,7 @@ export async function findSimilarSuppliers(db: AppDB, input: { name: string; pho
 
 export async function createSupplier(db: AppDB, input: SupplierInput, opts: { allowDuplicate?: boolean } = {}): Promise<Supplier> {
   const name = cleanStr(input.name, 100);
-  if (!name) fail('required', 'Ingrese el nombre del proveedor.', 'name');
+  if (!name) fail('required', 'Escribe el nombre del proveedor.', 'name');
   return tx(db, async () => {
     if (!opts.allowDuplicate) {
       const sim = await findSimilarSuppliers(db, { name, phone: input.phone });
@@ -112,7 +112,7 @@ export async function findSimilarCustomers(db: AppDB, input: { name: string; pho
 
 export async function createCustomer(db: AppDB, input: CustomerInput, opts: { allowDuplicate?: boolean } = {}): Promise<Customer> {
   const name = cleanStr(input.name, 100);
-  if (!name) fail('required', 'Ingrese el nombre del comprador.', 'name');
+  if (!name) fail('required', 'Escribe el nombre del comprador.', 'name');
   return tx(db, async () => {
     if (!opts.allowDuplicate) {
       const sim = await findSimilarCustomers(db, { name, phone: input.phone });

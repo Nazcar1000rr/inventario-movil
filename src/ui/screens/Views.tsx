@@ -24,7 +24,7 @@ export function ViewsScreen() {
   const [creating, setCreating] = useState(false);
   const name = new Map((invs ?? []).map((i) => [i.id, i.name]));
   return (
-    <Page
+    <Page help="views"
       title="Vistas consolidadas"
       back="/mas"
       actions={
@@ -154,7 +154,7 @@ export function ViewDetailScreen({ id }: { id: ID }) {
   };
 
   return (
-    <Page
+    <Page help="views"
       title={view.name}
       subtitle={`Vista de ${view.inventoryIds.length} inventarios`}
       back="/vistas"
@@ -253,7 +253,7 @@ export function ViewDetailScreen({ id }: { id: ID }) {
       )}
       {editing ? <ViewEditor view={view} onClose={() => setEditing(false)} /> : null}
       {selling ? (
-        <Sheet title="¿Desde qué inventario vende?" onClose={() => setSelling(null)}>
+        <Sheet title="¿Desde qué inventario vendes?" onClose={() => setSelling(null)}>
           <p className="small muted">La venta se registra en el inventario de origen de la unidad. La vista se actualizará sola.</p>
           {selling.sources
             .filter((s) => s.available > 0)

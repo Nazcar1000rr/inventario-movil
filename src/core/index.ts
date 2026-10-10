@@ -17,3 +17,7 @@ export * from './services/reports';
 export * from './services/integrity';
 export * from './services/backup';
 export * from './services/search';
+export * from './services/debts';
+export * from './services/capital';
+export * from './services/pricing';
+export * from './services/insights';

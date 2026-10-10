@@ -20,7 +20,7 @@ import {
 import { Icon } from '../components/Icon';
 import { Badge, Card, confirmAction, Field, FormError, KV, Loading, Notice, Page, TextInput } from '../components/ui';
 import { isNative, pickTextFile, platformName, saveToDocuments, shareFile, downloadFile } from '../platform';
-import { db, toast, useAction, useLive } from '../store';
+import { db, practice, safetyName, toast, useAction, useLive } from '../store';
 
 const SUMMARY_TABLES: TableName[] = ['inventories', 'products', 'units', 'purchases', 'sales', 'payments', 'returns', 'expenses', 'suppliers', 'customers', 'warranties', 'photos', 'consolidatedViews'];
 
@@ -32,12 +32,13 @@ function sizeLabel(bytes: number): string {
 
 export function BackupScreen() {
   const lastBackup = useLive(async (d) => (await d.meta.get('lastBackupAt'))?.value ?? null);
-  const safety = useLive(() => getSafetySnapshotInfo());
+  const safety = useLive(() => getSafetySnapshotInfo(safetyName));
   return (
-    <Page title="Respaldo y restauración" back="/mas">
-      <Notice kind="warn" title="Sus datos viven solo en este dispositivo">
-        Si desinstala la app, borra los datos del navegador o pierde el teléfono, se pierden. Haga respaldos con frecuencia y guárdelos fuera del teléfono (por ejemplo, envíelos a su propio WhatsApp, correo o Drive).
+    <Page title="Respaldo y restauración" help="backup" back="/mas">
+      <Notice kind="warn" title="Tus datos viven solo en este dispositivo">
+        Si desinstalas la app, borras los datos del navegador o pierdes el teléfono, se pierden. Haz respaldos con frecuencia y guárdalos fuera del teléfono (por ejemplo, envíalos a tu propio WhatsApp, correo o Drive).
       </Notice>
+      {practice ? <Notice kind="warn" title="Estás en modo práctica">Los respaldos que hagas aquí contienen solo los datos de ejemplo. Sal del modo práctica para respaldar tus datos reales.</Notice> : null}
       <p className="small muted">Último respaldo: {lastBackup ? formatDateTime(lastBackup) : 'nunca'}</p>
       <ExportCard />
       <ImportCard />
@@ -81,7 +82,7 @@ function ExportCard() {
     <Card title="Exportar respaldo completo">
       <div className="stack">
         <p className="small">
-          Crea un archivo con <strong>todos</strong> sus datos: inventarios, productos, unidades, compras, ventas, pagos, gastos, proveedores, compradores, garantías, fotos, historial y configuración.
+          Crea un archivo con <strong>todos</strong> tus datos: inventarios, productos, unidades, compras, ventas, pagos, gastos, proveedores, compradores, garantías, fotos, historial y configuración.
         </p>
         <label className="check">
           <input type="checkbox" checked={usePassword} onChange={(e) => { setUsePassword(e.target.checked); setResult(null); }} /> Proteger con contraseña (cifrado AES-256)
@@ -96,7 +97,7 @@ function ExportCard() {
                 <TextInput id="bk-pw2" type="password" autoComplete="new-password" value={pw2} onChange={(e) => { setPw2(e.target.value); setResult(null); }} />
               </Field>
             </div>
-            <Notice kind="warn">Si olvida la contraseña, el respaldo no se podrá abrir. No existe forma de recuperarla: guárdela en un lugar seguro.</Notice>
+            <Notice kind="warn">Si olvidas la contraseña, el respaldo no se podrá abrir. No existe forma de recuperarla: guárdala en un lugar seguro.</Notice>
           </>
         ) : null}
         {!result ? (
@@ -124,7 +125,7 @@ function ExportCard() {
               </button>
             ) : null}
             <p className="tiny muted">
-              Elija dónde guardarlo: Archivos/iCloud, Drive, correo, WhatsApp, AirDrop, Bluetooth… Transferirlo a otro teléfono es una copia manual, no una sincronización: después cada teléfono cambia por separado.
+              Elige dónde guardarlo: Archivos/iCloud, Drive, correo, WhatsApp, AirDrop, Bluetooth… Transferirlo a otro teléfono es una copia manual, no una sincronización: después cada teléfono cambia por separado.
             </p>
           </div>
         )}
@@ -198,12 +199,12 @@ function ImportCard() {
             <p className="small">Esto no sincroniza los teléfonos: después de importar, cada uno seguirá cambiando por separado.</p>
           </>
         ),
-        input: { label: 'Escriba REEMPLAZAR para confirmar', required: true, mustEqual: 'REEMPLAZAR' },
+        input: { label: 'Escribe REEMPLAZAR para confirmar', required: true, mustEqual: 'REEMPLAZAR' },
         confirmText: 'Reemplazar datos',
       });
       if (!ok) return;
     }
-    const r = await act.run(() => restoreBackup(db, parsed, { allowIntegrityWarnings: force }));
+    const r = await act.run(() => restoreBackup(db, parsed, { allowIntegrityWarnings: force, safetyName }));
     if (r) {
       setDone(`Restauración completa: ${r.counts.inventories} inventario(s), ${r.counts.units} unidad(es), ${r.counts.sales} venta(s). Verificación de integridad: ${r.integrity.ok ? 'correcta' : `${r.integrity.issues.length} aviso(s)`}.`);
       reset();
@@ -222,14 +223,14 @@ function ImportCard() {
   return (
     <Card title="Importar / restaurar respaldo">
       <div className="stack">
-        <p className="small">Abra un archivo de respaldo de esta app (de este u otro teléfono, iPhone o Android). Antes de importar verá un resumen. Si el archivo está dañado, no se modifica nada.</p>
+        <p className="small">Abre un archivo de respaldo de esta app (de este u otro teléfono, iPhone o Android). Antes de importar verás un resumen. Si el archivo está dañado, no se modifica nada.</p>
         <button className="btn block" onClick={() => void choose()} disabled={busy || act.busy} data-testid="choose-backup">
           <Icon name="upload" /> Elegir archivo de respaldo
         </button>
         {busy ? <Loading label="Leyendo y verificando el archivo…" /> : null}
         {error ? (
           <Notice kind="bad" title="No se puede importar este archivo">
-            {error} Sus datos actuales no se modificaron.
+            {error} Tus datos actuales no se modificaron.
           </Notice>
         ) : null}
         {needPw && file ? (
@@ -284,7 +285,7 @@ function ImportCard() {
                 <p>
                   Actualmente hay {analysis.currentCounts.inventories} inventario(s), {analysis.currentCounts.units + analysis.currentCounts.products} producto(s)/unidad(es) y {analysis.currentCounts.sales} venta(s). Importar los <strong>reemplazará</strong>.
                 </p>
-                {analysis.olderThanCurrent ? <p style={{ marginTop: 6 }}>⚠ El respaldo es más antiguo que sus últimos cambios: se perderá lo registrado después de {formatDateTime(parsed.createdAt)}.</p> : null}
+                {analysis.olderThanCurrent ? <p style={{ marginTop: 6 }}>⚠ El respaldo es más antiguo que tus últimos cambios: se perderá lo registrado después de {formatDateTime(parsed.createdAt)}.</p> : null}
                 <p style={{ marginTop: 6 }}>
                   Combinar dos instalaciones no está disponible: sus códigos internos y registros podrían chocar y duplicar existencias o dinero. Para proteger los datos, la importación siempre reemplaza todo (con copia interna para deshacer).
                 </p>
@@ -331,7 +332,7 @@ function UndoCard({ createdAt }: { createdAt: string }) {
           disabled={act.busy}
           onClick={async () => {
             const ok = await confirmAction({ title: 'Deshacer restauración', message: 'Se volverá a los datos que había antes de la última restauración.', confirmText: 'Deshacer', danger: true });
-            if (ok) await act.run(() => undoLastRestore(db), 'Se recuperaron los datos anteriores');
+            if (ok) await act.run(() => undoLastRestore(db, safetyName), 'Se recuperaron los datos anteriores');
           }}
         >
           <Icon name="undo" /> Volver a los datos anteriores

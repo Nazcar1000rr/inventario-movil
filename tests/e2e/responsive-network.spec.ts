@@ -13,7 +13,7 @@ const VIEWPORTS: [string, number, number][] = [
 ];
 
 test('21. diseño adaptable: sin desbordes horizontales en 8 tamaños de pantalla', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(420_000);
   await page.goto('/');
   const inv = await createInventory(page, 'Inventario con un nombre bastante largo para probar', 'Profesional');
   await purchase(page, inv, { phone: { model: 'iPhone 17 Pro Max', capacity: '2 TB' } }, 2, 9_999_999, { imeis: ['359876543210987'] });
@@ -37,6 +37,13 @@ test('21. diseño adaptable: sin desbordes horizontales en 8 tamaños de pantall
     ['operaciones', '/operaciones'],
     ['respaldo', '/respaldo'],
     ['ajustes', '/ajustes'],
+    ['capital', '/capital'],
+    ['deudas', '/deudas'],
+    ['precios', '/precios'],
+    ['calculadora', '/calculadora'],
+    ['resumen', '/resumen'],
+    ['ayuda', '/ayuda'],
+    ['manual', '/ayuda/manual'],
   ];
   for (const [vname, w, h] of VIEWPORTS) {
     await page.setViewportSize({ width: w, height: h });
@@ -44,7 +51,7 @@ test('21. diseño adaptable: sin desbordes horizontales en 8 tamaños de pantall
       await page.goto(`/#${path}`);
       await page.waitForTimeout(250);
       await noHorizontalOverflow(page);
-      if (['iphone-se-1', 'android-pixel', 'escritorio'].includes(vname) && ['inicio', 'unidad', 'venta-nueva', 'informes'].includes(sname))
+      if (['iphone-se-1', 'android-pixel', 'escritorio'].includes(vname) && ['inicio', 'unidad', 'venta-nueva', 'informes', 'capital'].includes(sname))
         await page.screenshot({ path: `${SHOTS}/responsive-${vname}-${sname}.png` });
     }
   }

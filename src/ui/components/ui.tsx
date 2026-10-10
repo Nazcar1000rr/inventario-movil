@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { formatCOP, formatInt, fromLocalInput, parseMoney, toLocalInput } from '../../core';
 import { goBack } from '../router';
 import { pushModal, useToasts } from '../store';
+import { HelpButton } from './help';
 import { Icon } from './Icon';
 
 /* ================= Página ================= */
@@ -12,12 +13,15 @@ export function Page({
   subtitle,
   back,
   actions,
+  help,
   children,
 }: {
   title: string;
   subtitle?: ReactNode;
   back?: string | true;
   actions?: ReactNode;
+  /** Clave de ayuda de la pantalla (botón "?"). */
+  help?: string;
   children: ReactNode;
 }) {
   useEffect(() => {
@@ -36,6 +40,7 @@ export function Page({
             <h1>{title}</h1>
             {subtitle ? <div className="topbar-sub">{subtitle}</div> : null}
           </div>
+          {help ? <HelpButton helpKey={help} /> : null}
           {actions}
         </div>
       </header>
@@ -570,7 +575,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: s
           <Notice kind="bad" title="Ocurrió un error al mostrar esta pantalla">
             <p>{this.state.error.message || 'Error desconocido.'}</p>
             <p className="tiny" style={{ marginTop: 6 }}>
-              Sus datos no se modificaron. Puede volver al inicio o recargar la app.
+              Tus datos no se modificaron. Puedes volver al inicio o recargar la app.
             </p>
           </Notice>
           <div className="actions">

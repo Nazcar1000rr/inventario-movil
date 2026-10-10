@@ -80,6 +80,50 @@ export async function shareFile(filename: string, text: string, mime = 'applicat
   return 'downloaded';
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+/** Comparte o guarda un archivo binario (imagen PNG, PDF). Mismo comportamiento que `shareFile`. */
+export async function shareBinary(filename: string, bytes: Uint8Array, mime: string, dialogTitle = 'Compartir'): Promise<ShareOutcome> {
+  if (isNative()) {
+    const res = await Filesystem.writeFile({ path: filename, data: bytesToBase64(bytes), directory: Directory.Cache });
+    try {
+      await Share.share({ title: filename, files: [res.uri], dialogTitle });
+      return 'shared';
+    } catch (e) {
+      if (String((e as Error)?.message ?? e).toLowerCase().includes('cancel')) return 'cancelled';
+      throw e;
+    }
+  }
+  const file = new File([bytes as BlobPart], filename, { type: mime });
+  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+  if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+    try {
+      await nav.share({ files: [file], title: filename });
+      return 'shared';
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return 'cancelled';
+    }
+  }
+  downloadBlob(filename, new Blob([bytes as BlobPart], { type: mime }));
+  return 'downloaded';
+}
+
+export function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
 export function downloadFile(filename: string, text: string, mime = 'application/json'): void {
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
   const a = document.createElement('a');

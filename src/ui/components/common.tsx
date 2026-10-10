@@ -92,7 +92,7 @@ export function InventorySelect({
   const list = inventories.filter((i) => includeArchived || !i.archived || i.id === value);
   return (
     <select id={id} className="select" value={value} aria-invalid={invalid || undefined} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Seleccione un inventario…</option>
+      <option value="">Elige un inventario…</option>
       {list.map((i) => (
         <option key={i.id} value={i.id}>
           {i.name}

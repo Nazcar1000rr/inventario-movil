@@ -27,15 +27,24 @@ import {
   type ID,
   type Inspection,
   type InspectionItem,
+  type PartKey,
+  type PartQuality,
   type Unit,
+  getUnitPricing,
+  PART_KEYS,
+  PART_LABEL,
+  SUGGESTED_SOURCE_LABEL,
 } from '../../core';
 import { DaysLabel, ModeBadge, UnitStatusBadge } from '../components/common';
+import { L } from '../components/help';
+import { PartsBadges, UnitPartsCard } from '../components/parts';
 import { Icon } from '../components/Icon';
 import {
   ActionMenu,
   ask,
   Badge,
   Card,
+  Chips,
   confirmAction,
   DateTimeInput,
   Empty,
@@ -101,7 +110,7 @@ export function UnitDetailScreen({ id }: { id: ID }) {
   };
 
   return (
-    <Page
+    <Page help="unit"
       title={pro ? u.code : p.name}
       subtitle={
         <span className="row">
@@ -117,7 +126,7 @@ export function UnitDetailScreen({ id }: { id: ID }) {
             { label: 'Editar datos', icon: 'edit', onSelect: () => setSheet('edit') },
             { label: 'Cambiar estado', icon: 'sliders', hidden: !inStock, onSelect: () => setSheet('status') },
             { label: 'Inspección', icon: 'clipboard', hidden: !pro, onSelect: () => setSheet('inspection') },
-            { label: 'Registrar reparación', icon: 'wrench', hidden: !pro, onSelect: () => setSheet('repair') },
+            { label: 'Registrar reparación pagada', icon: 'wrench', onSelect: () => setSheet('repair') },
             { label: 'Sumar costo adicional', icon: 'money', hidden: !inStock, onSelect: () => setSheet('extra') },
             { label: u.baseCost === null ? 'Completar costo' : 'Corregir costo', icon: 'money', hidden: u.source !== 'initial' || (u.baseCost !== null && u.status === 'sold'), onSelect: () => setSheet('cost') },
             { label: u.acquiredAt ? 'Corregir fecha de ingreso' : 'Completar fecha de ingreso', icon: 'clock', hidden: u.source !== 'initial', onSelect: () => setSheet('date') },
@@ -132,6 +141,8 @@ export function UnitDetailScreen({ id }: { id: ID }) {
         {u.cycle > 1 ? <Badge kind="info">Ciclo {u.cycle} (tras devolución)</Badge> : null}
         {cost === null ? <Badge kind="warn">⚠ Costo desconocido</Badge> : null}
         {!u.acquiredAt ? <Badge kind="warn">⚠ Fecha desconocida</Badge> : null}
+        {u.condition ? <Badge>{u.condition}</Badge> : null}
+        <PartsBadges parts={u.partsHistory} />
       </div>
       <FormError error={act.error} />
       {u.status === 'available' && !inv.archived ? (
@@ -179,6 +190,10 @@ export function UnitDetailScreen({ id }: { id: ID }) {
         />
       </Card>
 
+      <UnitPartsCard unit={u} />
+
+      {inStock ? <PricingCard unitId={u.id} /> : null}
+
       {pro || u.inspection ? (
         <Card title="Inspección" action={<button className="btn sm" onClick={() => setSheet('inspection')}>{u.inspection ? 'Editar' : 'Iniciar'}</button>}>
           {u.inspection ? <InspectionView inspection={u.inspection} /> : <p className="small muted">Sin inspección registrada.</p>}
@@ -186,9 +201,9 @@ export function UnitDetailScreen({ id }: { id: ID }) {
       ) : null}
 
       {pro || repairs.length ? (
-        <Card title="Reparaciones" action={pro ? <button className="btn sm" onClick={() => setSheet('repair')}>Agregar</button> : undefined}>
+        <Card title="Reparaciones pagadas" action={<button className="btn sm" onClick={() => setSheet('repair')}>Agregar</button>}>
           {repairs.length === 0 ? (
-            <p className="small muted">Sin reparaciones.</p>
+            <p className="small muted">Sin reparaciones pagadas.</p>
           ) : (
             <ul className="list">
               {repairs
@@ -343,7 +358,7 @@ function InspectionSheet({ unit, onClose }: { unit: Unit; onClose: () => void })
         </button>
       }
     >
-      <p className="small muted">Marque solo lo que haya revisado. Indique quién dio la información: lo dicho por el vendedor no equivale a una verificación.</p>
+      <p className="small muted">Marca solo lo que hayas revisado. Indica quién dio la información: lo dicho por el vendedor no equivale a una verificación.</p>
       <Field label="Estado de batería (%)" htmlFor="ins-bat" hint="Se ingresa manualmente (la app no lee la batería del iPhone).">
         <IntInput id="ins-bat" value={battery} onChange={(v) => setBattery(v === null ? null : Math.min(100, v))} placeholder="Desconocido" />
       </Field>
@@ -454,7 +469,7 @@ function EditUnitSheet({ unit, pro, conditions, onClose }: { unit: Unit; pro: bo
       ) : null}
       {dups.length ? (
         <Notice kind="warn" title="Identificador repetido">
-          Ya existe en: {dups.map((d) => `${d.code} (${d.status === 'sold' ? 'vendida' : d.status})`).join(', ')}. Si es el mismo equipo recomprado, puede continuar.
+          Ya existe en: {dups.map((d) => `${d.code} (${d.status === 'sold' ? 'vendida' : d.status})`).join(', ')}. Si es el mismo equipo recomprado, puedes continuar.
         </Notice>
       ) : null}
       <div className="grid-2">
@@ -503,24 +518,51 @@ function RepairSheet({ unit, onClose }: { unit: Unit; onClose: () => void }) {
   const [parts, setParts] = useState('');
   const [tech, setTech] = useState('');
   const [cost, setCost] = useState<number | null>(0);
+  const [part, setPart] = useState<PartKey | ''>('');
+  const [quality, setQuality] = useState<PartQuality>('original');
+  const [warn, setWarn] = useState(false);
   const [opId] = useState(newOpId);
   const act = useAction();
   const inStock = ['available', 'in_review', 'damaged'].includes(unit.status);
   return (
-    <Sheet title="Registrar reparación" onClose={onClose}>
+    <Sheet title="Registrar reparación pagada" onClose={onClose}>
       <form
         className="stack"
         onSubmit={async (e) => {
           e.preventDefault();
-          const ok = await act.run(() => addRepair(db, { opId, unitId: unit.id, date: date ?? '', description, partsReplaced: parts, technician: tech, cost: cost ?? 0 }).then(() => true), 'Reparación registrada');
+          const ok = await act.run(
+            () =>
+              addRepair(db, {
+                opId,
+                unitId: unit.id,
+                date: date ?? '',
+                description,
+                partsReplaced: parts,
+                technician: tech,
+                cost: cost ?? 0,
+                part: part ? { part, quality, unknownPartWarning: warn, label: part === 'other' ? parts || description : '' } : null,
+              }).then(() => true),
+            'Reparación registrada',
+          );
           if (ok) onClose();
         }}
       >
         <Field label="Descripción" htmlFor="rp-desc" error={act.field === 'description' ? act.error : null}>
           <TextInput id="rp-desc" value={description} onChange={(e) => setDescription(e.target.value)} invalid={act.field === 'description'} placeholder="Ej.: cambio de pantalla" />
         </Field>
+        <Field label="Pieza cambiada (se agrega al historial de piezas)">
+          <Chips label="Pieza cambiada" value={part} onChange={setPart} options={[['', 'Ninguna'], ...PART_KEYS.map((k) => [k, PART_LABEL[k]] as [PartKey, string])]} />
+        </Field>
+        {part ? (
+          <>
+            <Segmented label="Calidad de la pieza" value={quality} onChange={setQuality} options={[['original', 'Original'], ['generic', 'Genérica'], ['unknown', 'No sé']]} />
+            <label className="check">
+              <input type="checkbox" checked={warn} onChange={(e) => setWarn(e.target.checked)} /> Después del cambio el iPhone muestra "pieza desconocida"
+            </label>
+          </>
+        ) : null}
         <div className="grid-2">
-          <Field label="Partes reemplazadas" htmlFor="rp-parts">
+          <Field label="Detalle de partes (opcional)" htmlFor="rp-parts">
             <TextInput id="rp-parts" value={parts} onChange={(e) => setParts(e.target.value)} />
           </Field>
           <Field label="Técnico" htmlFor="rp-tech">
@@ -788,6 +830,47 @@ function PhotosCard({ unitId, photos, canAdd }: { unitId: ID; photos: { id: stri
           {urls[viewing] ? <img src={urls[viewing]} alt="Foto de la unidad" style={{ width: '100%', borderRadius: 8 }} /> : null}
         </Sheet>
       ) : null}
+    </Card>
+  );
+}
+
+/** Ayuda para ponerle precio al equipo: costo, mínimo, mercado, tu precio real y sugerido. */
+function PricingCard({ unitId }: { unitId: ID }) {
+  const info = useLive((d) => getUnitPricing(d, unitId), [unitId]);
+  if (!info) return null;
+  const q = new URLSearchParams({ model: info.model, cap: info.capacity, cond: info.condition }).toString();
+  return (
+    <Card title="Precio" action={<a className="small" href={`#/precios?${q}`}>Precios de mercado</a>}>
+      <KV
+        rows={[
+          [<L key="c" k="cogs">Tu costo</L>, formatCOP(info.cost)],
+          [<L key="m" k="minPrice">Precio mínimo</L>, info.minPrice === null ? '— (costo desconocido)' : formatCOP(info.minPrice)],
+          [
+            <L key="mk" k="marketPrice">Precio de mercado</L>,
+            info.market ? (
+              <span key="mv">
+                {formatCOP(info.market.price)}{' '}
+                <span className={`tiny ${info.market.stale ? 'delta-down' : 'muted'}`}>
+                  ({info.market.stale ? 'desactualizado, ' : ''}hace {info.market.ageDays} d)
+                </span>
+              </span>
+            ) : (
+              <span key="mn" className="muted">
+                Sin anotar
+              </span>
+            ),
+          ],
+          [<L key="r" k="recentPrice">Tu precio real</L>, info.recent ? `${formatCOP(info.recent.avg)} (${info.recent.count} venta(s), ${info.recent.days} d)` : <span key="rn" className="muted">Sin ventas recientes</span>],
+          [<L key="s" k="suggestedPrice">Precio sugerido</L>, info.suggested === null ? '—' : <strong key="sv">{formatCOP(info.suggested)}</strong>, true],
+        ]}
+      />
+      {info.suggestedSource ? (
+        <p className="tiny muted" style={{ marginTop: 6 }}>
+          Basado en: {SUGGESTED_SOURCE_LABEL[info.suggestedSource]}
+          {info.raisedToMin ? ' (subido al mínimo porque la referencia estaba por debajo)' : ''}.
+        </p>
+      ) : null}
+      {!info.condition ? <p className="tiny muted">Indica el estado del equipo (Nuevo, Usado o Restaurado) para usar precios de mercado.</p> : null}
     </Card>
   );
 }

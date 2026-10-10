@@ -1,8 +1,38 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
-import { AppError, errorMessage, getDB, type AppDB } from '../core';
+import { AppError, DB_NAME, errorMessage, getDB, type AppDB } from '../core';
 
-export const db: AppDB = getDB();
+/* ---------------- Modo práctica ---------------- */
+
+/** Base de datos SEPARADA con datos de ejemplo para practicar sin tocar los datos reales. */
+export const PRACTICE_DB = 'inventario-movil-practica';
+
+export function isPracticeMode(): boolean {
+  try {
+    return localStorage.getItem('practiceMode') === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Activa o desactiva el modo práctica y recarga la app (cada modo abre su propia base de datos). */
+export function setPracticeMode(on: boolean): void {
+  try {
+    if (on) localStorage.setItem('practiceMode', '1');
+    else localStorage.removeItem('practiceMode');
+  } catch {
+    /* sin almacenamiento local: no se puede cambiar de modo */
+  }
+  location.hash = '#/';
+  location.reload();
+}
+
+export const practice = isPracticeMode();
+
+export const db: AppDB = getDB(practice ? PRACTICE_DB : DB_NAME);
+
+/** Copia de seguridad interna (deshacer restauración) separada para cada modo. */
+export const safetyName: string | undefined = practice ? 'inventario-movil-practica-seguridad' : undefined;
 
 /** Consulta reactiva: se recalcula sola cuando cambian las tablas leídas. `undefined` = cargando. */
 export function useLive<T>(fn: (db: AppDB) => Promise<T> | T, deps: unknown[] = []): T | undefined {

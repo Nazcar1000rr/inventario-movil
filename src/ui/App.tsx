@@ -2,7 +2,13 @@ import { useState, type ReactNode } from 'react';
 import { Icon } from './components/Icon';
 import { AskHost, ErrorBoundary, Sheet, ToastHost } from './components/ui';
 import { navigate, useRoute } from './router';
+import { practice } from './store';
 import { BackupScreen } from './screens/Backup';
+import { CapitalScreen } from './screens/Capital';
+import { DebtDetailScreen, DebtsScreen } from './screens/Debts';
+import { HelpArticleScreen, HelpScreen, NewsHost, PracticeBanner } from './screens/Help';
+import { CalculatorScreen, MarketPricesScreen } from './screens/Pricing';
+import { SummaryScreen } from './screens/Summary';
 import { CatalogScreen } from './screens/Catalog';
 import { HomeScreen } from './screens/Home';
 import { HistoryScreen, InventoriesScreen, InventoryDetailScreen } from './screens/Inventories';
@@ -65,6 +71,18 @@ function resolve(seg: string[], q: URLSearchParams): ReactNode {
       return <MoreScreen />;
     case 'buscar':
       return <SearchScreen />;
+    case 'capital':
+      return <CapitalScreen />;
+    case 'deudas':
+      return b ? <DebtDetailScreen id={b} /> : <DebtsScreen />;
+    case 'precios':
+      return <MarketPricesScreen />;
+    case 'calculadora':
+      return <CalculatorScreen />;
+    case 'resumen':
+      return <SummaryScreen />;
+    case 'ayuda':
+      return b ? <HelpArticleScreen id={b} /> : <HelpScreen />;
   }
   return null;
 }
@@ -82,7 +100,10 @@ const SIDE: { href: string; label: string; icon: string; key: string }[] = [
   { href: '/operaciones?tab=ventas', label: 'Ventas', icon: 'tag', key: 'ventas' },
   { href: '/operaciones?tab=compras', label: 'Compras', icon: 'cart', key: 'compras' },
   { href: '/operaciones?tab=gastos', label: 'Gastos', icon: 'receipt', key: 'gastos' },
+  { href: '/capital', label: 'Capital', icon: 'trend', key: 'capital' },
+  { href: '/deudas', label: 'Deudas', icon: 'card', key: 'deudas' },
   { href: '/informes', label: 'Informes', icon: 'chart', key: 'informes' },
+  { href: '/precios', label: 'Precios de mercado', icon: 'tag', key: 'precios' },
   { href: '/garantias', label: 'Garantías', icon: 'shield', key: 'garantias' },
   { href: '/proveedores', label: 'Proveedores', icon: 'truck', key: 'proveedores' },
   { href: '/compradores', label: 'Compradores', icon: 'users', key: 'compradores' },
@@ -91,13 +112,17 @@ const SIDE: { href: string; label: string; icon: string; key: string }[] = [
   { href: '/buscar', label: 'Buscar', icon: 'search', key: 'buscar' },
   { href: '/respaldo', label: 'Respaldo', icon: 'download', key: 'respaldo' },
   { href: '/ajustes', label: 'Configuración', icon: 'sliders', key: 'ajustes' },
+  { href: '/ayuda', label: 'Ayuda', icon: 'help', key: 'ayuda' },
 ];
 
 export const QUICK_ACTIONS: { href: string; label: string; icon: string; hint: string }[] = [
   { href: '/ventas/nueva', label: 'Registrar venta', icon: 'tag', hint: 'Sale del inventario y suma ingresos' },
   { href: '/compras/nueva', label: 'Registrar compra', icon: 'cart', hint: 'Entra al inventario con su costo' },
   { href: '/gastos/nuevo', label: 'Registrar gasto', icon: 'receipt', hint: 'Transporte, publicidad, empaques…' },
-  { href: '/stock/nuevo', label: 'Ingresar stock existente', icon: 'box', hint: 'Mercancía que ya tenía (no es una compra nueva)' },
+  { href: '/stock/nuevo', label: 'Ingresar stock existente', icon: 'box', hint: 'Mercancía que ya tenías (no es una compra nueva)' },
+  { href: '/capital', label: 'Aporte, retiro o préstamo a ti', icon: 'wallet', hint: 'Dinero que entra o sale entre tú y el negocio' },
+  { href: '/deudas', label: 'Deuda o abono', icon: 'card', hint: 'Tarjeta, crédito del proveedor, préstamos' },
+  { href: '/calculadora', label: '¿Cuánto pagar por un equipo?', icon: 'calc', hint: 'Precio máximo de compra según el mercado' },
   { href: '/productos/nuevo', label: 'Crear producto', icon: 'plus', hint: 'Sin registrar existencias todavía' },
 ];
 
@@ -107,7 +132,8 @@ export function App() {
   const seg = route.segments;
   const sideKey = seg[0] === 'operaciones' ? route.query.get('tab') ?? 'ventas' : seg[0] ?? '';
   return (
-    <div className="app">
+    <div className={`app${practice ? ' practice' : ''}`}>
+      <PracticeBanner />
       <nav className="side-nav" aria-label="Secciones">
         <div className="brand">Inventario Móvil</div>
         <button className="btn primary" style={{ marginBottom: 10 }} onClick={() => setQuick(true)}>
@@ -174,6 +200,7 @@ export function App() {
           </div>
         </Sheet>
       ) : null}
+      <NewsHost />
       <AskHost />
       <ToastHost />
     </div>

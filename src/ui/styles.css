@@ -959,3 +959,243 @@ details.more > .stack {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.9em;
 }
+
+/* ===================== v2 ===================== */
+
+/* Ayuda: ⓘ y fórmulas */
+.info-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin-left: 4px;
+  min-width: 28px;
+  min-height: 28px;
+  margin-block: -6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.info-tip:hover,
+.info-tip:focus-visible {
+  color: var(--primary);
+}
+.with-tip {
+  display: inline;
+}
+.formula {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.formula p {
+  font-weight: 600;
+  margin-top: 2px;
+}
+.help-h {
+  font-size: 1rem;
+  margin-top: 4px;
+}
+.help-steps,
+.help-list {
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.help-article p {
+  line-height: 1.5;
+}
+
+/* Gráficas */
+.chart {
+  margin: 0;
+}
+.chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.chart-zero {
+  stroke: var(--text-2);
+  stroke-width: 1.2;
+}
+.chart-axis {
+  fill: var(--text-2);
+  font-size: 13px;
+}
+.chart-bar-pos {
+  fill: var(--success);
+}
+.chart-bar-neg {
+  fill: var(--danger);
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  margin-top: 6px;
+}
+.chart-legend i {
+  display: inline-block;
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.bar.neg > span {
+  background: var(--danger);
+}
+
+/* KPI con enlace */
+.kpi-link {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+  min-width: 0;
+}
+.kpi-link .kpi {
+  height: 100%;
+}
+.kpi-link:hover .kpi {
+  border-color: var(--primary);
+}
+
+/* Primeros pasos */
+.checklist .item {
+  gap: 10px;
+}
+.check-done,
+.check-todo {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.check-done {
+  background: var(--success);
+  color: #fff;
+}
+.check-todo {
+  border: 2px solid var(--border);
+}
+
+/* Modo práctica */
+.practice-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nav-h) + var(--safe-bottom));
+  z-index: 29;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px calc(var(--safe-right) + 12px) 6px calc(var(--safe-left) + 12px);
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-top: 2px solid var(--warning);
+  font-size: 0.9rem;
+}
+.app.practice .content {
+  padding-bottom: 64px;
+}
+@media (min-width: 960px) {
+  .practice-banner {
+    bottom: 0;
+    left: 232px;
+  }
+}
+
+/* Precio al vender */
+.price-hints .notice {
+  padding: 8px 10px;
+}
+
+/* Guardar fijo en formularios largos */
+.sticky-save {
+  position: sticky;
+  bottom: calc(var(--nav-h) + var(--safe-bottom) + 8px);
+  z-index: 5;
+}
+@media (min-width: 960px) {
+  .sticky-save {
+    bottom: 12px;
+  }
+}
+
+/* Manual */
+.manual-title {
+  font-size: 1.5rem;
+}
+.manual-cat {
+  break-after: avoid-page;
+  page-break-after: avoid;
+  font-size: 1.2rem;
+  margin: 18px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--primary);
+}
+.manual-article {
+  margin: 12px 0 18px;
+  break-inside: avoid-page;
+}
+.manual-article h3 {
+  break-after: avoid-page;
+  font-size: 1.05rem;
+  margin-bottom: 2px;
+}
+.manual-glossary div {
+  margin: 8px 0;
+}
+.manual-glossary dt {
+  font-weight: 700;
+}
+.manual-glossary dd {
+  margin: 0;
+}
+@media print {
+  .side-nav,
+  .bottom-nav,
+  .topbar,
+  .no-print,
+  .toasts,
+  .practice-banner {
+    display: none !important;
+  }
+  body,
+  .app,
+  .main {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .content {
+    max-width: none;
+    padding: 0;
+  }
+  .notice {
+    border: 1px solid #999;
+  }
+}
+
+/* Listas donde el texto completo importa (ayuda, novedades, primeros pasos, piezas) */
+.wrap-sub .item-title,
+.wrap-sub .item-sub {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}

@@ -117,7 +117,7 @@ export function ProductPicker({
         <Loading />
       ) : list.length === 0 ? (
         <Empty title={products.length ? 'Sin resultados' : 'Este inventario no tiene productos'}>
-          {mode === 'sale' ? <p className="small">Primero registre una compra o un ingreso de stock.</p> : null}
+          {mode === 'sale' ? <p className="small">Primero registra una compra o un ingreso de stock.</p> : null}
         </Empty>
       ) : (
         <ul className="list card flush">
@@ -283,7 +283,7 @@ export function QuickProductForm({
         <>
           <Field label="Modelo" htmlFor="qp-model" error={act.field === 'name' ? act.error : null}>
             <select id="qp-model" className="select" value={catalogId} onChange={(e) => { setCatalogId(e.target.value); setCapacity(''); }}>
-              <option value="">Seleccione el modelo…</option>
+              <option value="">Elige el modelo…</option>
               {groupByGeneration(models).map(([gen, ms]) => (
                 <optgroup key={gen} label={gen}>
                   {ms.map((m) => (

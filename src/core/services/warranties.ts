@@ -157,7 +157,7 @@ export interface ClaimInput {
 export async function addClaim(db: AppDB, input: ClaimInput): Promise<WarrantyClaim> {
   const date = assertDate(input.date, 'date', 'Fecha del reclamo');
   const desc = cleanStr(input.description, 1000);
-  if (!desc) fail('required', 'Describa el reclamo.', 'description');
+  if (!desc) fail('required', 'Describe el reclamo.', 'description');
   const cost = assertMoney(input.cost ?? 0, 'cost', 'Costo');
   return tx(db, async () => {
     const w = await db.warranties.get(input.warrantyId);

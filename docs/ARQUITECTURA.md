@@ -18,20 +18,24 @@
 |---|---|
 | `inventories` | Nombre, modo (`simple`/`pro`), archivado y notas |
 | `products` | Producto dentro de un inventario. Tipo (teléfono, audífonos, accesorio u otro) y **método de control**: `unit` (por unidad) o `quantity` (por cantidad). Para "por cantidad" guarda `qty`, `stockValue` (valor a costo) y `unknownCostQty` (cantidad sin costo conocido) |
-| `units` | Unidad física: `code` (único y permanente), estado, fecha de ingreso, `availableSince` (inicio del ciclo actual), ciclo, `baseCost` (`null` = desconocido), `extraCost` (costos capitalizados), IMEI, serial, color, capacidad, batería, inspección, defectos, compra y venta vigente |
+| `units` | Unidad física: `code` (único y permanente), estado, fecha de ingreso, `availableSince` (inicio del ciclo actual), ciclo, `baseCost` (`null` = desconocido), `extraCost` (costos capitalizados), IMEI, serial, color, capacidad, **estado del equipo** (Nuevo / Usado / Restaurado), batería, inspección, defectos, **`partsHistory`** (v2: piezas cambiadas), compra y venta vigente |
 | `catalogModels` | Catálogo de marcas y modelos (base + agregados). **No** identifica unidades |
-| `purchases` / `purchaseLines` | Compra (fecha, proveedor, gastos, total, estado) y sus líneas (cantidad, pagado, gasto asignado, costo total, unidades creadas) |
+| `purchases` / `purchaseLines` | Compra (fecha, proveedor, gastos, total, estado, **`paymentSource`** `cash`/`debt` y **`debtId`** en v2) y sus líneas (cantidad, pagado, gasto asignado, costo total, unidades creadas) |
 | `sales` / `saleLines` | Venta (subtotal, descuento, total, entrega, estado) y líneas: **una línea por unidad física**, o una por producto "por cantidad". Cada línea guarda el reparto del descuento, el ingreso neto, el **costo de lo vendido (congelado)**, la cantidad sin costo, el inicio del ciclo y lo devuelto |
 | `payments` | Pagos (`payment`) y reembolsos (`refund`) de una venta |
 | `returns` | Devoluciones: líneas devueltas, destino, ingreso y costo revertidos, reembolso |
-| `expenses` | Gastos: `operating` (se restan de la ganancia) o `capitalized` (se suman al costo de una unidad o producto). Pueden estar ligados a un inventario, venta, unidad, reparación o reclamo |
+| `expenses` | Gastos: `operating` (se restan de la ganancia) o `capitalized` (se suman al costo de una unidad o producto). Pueden estar ligados a un inventario, venta, unidad, reparación, reclamo, **deuda** (intereses, v2) o ser una **comisión de medio de pago** (`paymentFee`, v2) |
 | `movements` | Libro de existencias: cada entrada o salida con cantidad, costo, pérdida, referencia y una secuencia (`seq`) |
 | `warranties` / `warrantyClaims` | Garantías al cliente o del proveedor, con vencimiento calculado, y sus reclamos |
 | `repairs`, `photos` | Reparaciones y fotos (JPEG reducido a 1280 px) por unidad |
 | `suppliers`, `customers` | Proveedores y compradores. Sus totales se calculan a partir de las operaciones |
 | `consolidatedViews` | Vista = lista de inventarios. **No contiene datos propios** |
 | `history` | Bitácora legible de todos los cambios |
-| `counters`, `settings`, `meta` | Contadores de códigos y de secuencia, configuración, identificador de la instalación y fechas de respaldo |
+| `counters`, `settings`, `meta` | Contadores de códigos y de secuencia, configuración, identificador de la instalación, fechas de respaldo y última versión vista (novedades) |
+| `capital` (v2) | Aportes, retiros, ajustes de caja, préstamos al dueño y sus devoluciones. Con inventario o generales; anulables |
+| `debts` / `debtPayments` (v2) | Deudas (tarjeta, proveedor, préstamo, otra), si el dinero entró a la caja o pagó una compra, y sus abonos (capital + intereses) |
+| `marketPrices` (v2) | Precios de mercado anotados por modelo + capacidad + estado, con fecha (historial completo) |
+| `goals` (v2) | Metas de valor del negocio o de crecimiento, generales o por inventario |
 
 Todas las operaciones que tocan varias tablas (compra, venta, devolución, anulación, ajuste, restauración) se ejecutan en **una sola transacción**. Si algo falla, IndexedDB revierte todo.
 
@@ -66,7 +70,8 @@ Todas las operaciones que tocan varias tablas (compra, venta, devolución, anula
 - **Productos por cantidad:** **costo promedio ponderado**. `stockValue` acumula el valor a costo. Una salida de `q` unidades cuesta `round(stockValue × q / cantidad con costo)`, y la última salida se lleva exactamente el resto. El stock con costo desconocido sale primero, porque se asume que es el más antiguo.
 - **Costo desconocido:**
   - No se inventa. La venta registra cuántas unidades salieron sin costo, y los informes muestran la ganancia como **incompleta**.
-  - Si después se completa el costo de una unidad, se actualiza el costo de sus ventas y devoluciones.
+  - Si después se completa el costo de una unidad, se actualiza el costo de sus ventas y devoluciones **y también sus movimientos** (v2), para que el valor del inventario calculado con movimientos coincida siempre con el de las unidades.
+  - Al dar de baja una unidad con costo base desconocido, igual se da de baja lo que sí se conoce (sus costos adicionales).
 - **Gasto capitalizado** (reparación o transporte de una unidad en existencia): se suma al costo de la unidad y entra en la ganancia **una sola vez**, como costo de lo vendido al venderla. Si la unidad ya se vendió, una reparación se registra como gasto operativo.
 - Los gastos de la compra viven en la compra, los de la venta (comisión, envío) en la venta como gastos operativos, y los costos de reclamos de garantía como gasto operativo del reclamo. Ningún importe existe en dos lugares, así que ninguno se resta dos veces.
 
@@ -96,7 +101,7 @@ Invertido en compras     = Σ total de las compras del periodo (incluye sus gast
 - **Fecha desconocida:** se excluye de los promedios y se informa cuántas unidades quedaron fuera.
 - **Velocidad:** promedio, mínimo y máximo de días hasta vender por modelo, categoría e inventario, más lo vendido más rápido. Con menos de 3 datos se marca "pocos datos".
 - **% vendido** = vendidas en el periodo ÷ (vendidas + disponibles ahora).
-- **Estancado:** días en inventario ≥ al umbral configurable (60 por defecto).
+- **Estancado (v2, opcional):** se puede apagar. Umbral general (60 días por defecto) y, si se quiere, uno para equipos **nuevos** y otro para **usados/restaurados** (vacío = el general). Aunque los avisos estén apagados, el "dinero dormido" de Capital usa esos mismos umbrales.
 
 ## 7. Vistas consolidadas
 
@@ -116,8 +121,8 @@ Es un archivo `.json` propio:
 {
   "format": "inventario-movil-backup",
   "formatVersion": 1,
-  "schemaVersion": 1,
-  "appVersion": "1.0.0",
+  "schemaVersion": 2,
+  "appVersion": "2.0.0",
   "createdAt": "2026-10-09T…Z",
   "installationId": "…",
   "encrypted": false,
@@ -126,7 +131,7 @@ Es un archivo `.json` propio:
 }
 ```
 
-- Incluye las **23 tablas** completas: datos, relaciones, identificadores, historial, configuración y fotos. Las fotos van en base64.
+- Incluye las **28 tablas** completas (23 de la v1 + capital, deudas, abonos, precios de mercado y metas): datos, relaciones, identificadores, historial, configuración y fotos. Las fotos van en base64.
 - **Cifrado opcional:**
   - `encrypted: true`, con la clave derivada por PBKDF2-SHA256 (310 000 iteraciones) y cifrado AES-GCM de 256 bits.
   - Solo la cabecera queda en claro.
@@ -148,9 +153,15 @@ Es un archivo `.json` propio:
 
 ## 9. Migraciones
 
-- **Base de datos:** cada cambio de esquema añade `this.version(N).stores(...).upgrade(tx => …)` en `src/core/db.ts`. Dexie ejecuta las migraciones pendientes en una transacción al abrir la base. Hay una prueba que lo demuestra con una versión 2 simulada.
-- **Respaldos:** `BACKUP_MIGRATIONS` en `backup.ts` convierte respaldos de versiones anteriores paso a paso (`v → v+1`) antes de validarlos. Un respaldo de una versión **más nueva** que la app se rechaza con un mensaje claro.
-- **Integridad:** `verifyIntegrity()` comprueba que las existencias y el valor coincidan con los movimientos, que el saldo de cada unidad sea coherente con su estado, que ninguna unidad esté vendida dos veces, que los totales coincidan con las líneas y que todas las referencias existan.
+- **Base de datos:** cada cambio de esquema añade `this.version(N).stores(...).upgrade(tx => …)` en `src/core/db.ts`. Dexie ejecuta las migraciones pendientes en una transacción al abrir la base.
+- **v1 → v2 (automática al abrir la app actualizada):**
+  - Crea las tablas nuevas (vacías).
+  - Unidades: `partsHistory = []` y el estado "Reacondicionado" pasa a llamarse "Restaurado" (también en la lista de estados de Configuración).
+  - Compras: `paymentSource = 'cash'`, `debtId = null` (en la v1 todas salían de la caja).
+  - Movimientos de unidades de stock inicial cuyo costo se completó o corrigió después, y bajas de unidades con costo desconocido: se alinean con el costo actual (función `alignUnitMovementV2`, idempotente).
+  - La configuración nueva (precios, comisiones, estancado por estado…) toma valores por defecto al leerse (`mergeSettings`).
+- **Respaldos:** `BACKUP_MIGRATIONS[1]` hace exactamente la misma conversión para respaldos de la v1, así un respaldo v1 importado en la v2 queda igual que una base v1 actualizada. Un respaldo de una versión **más nueva** que la app se rechaza con un mensaje claro.
+- **Integridad:** `verifyIntegrity()` comprueba que las existencias y el valor coincidan con los movimientos, que el saldo de cada unidad sea coherente con su estado, que ninguna unidad esté vendida dos veces, que los totales coincidan con las líneas y que todas las referencias existan. En v2 también: deudas, abonos e intereses coherentes, compras con deuda enlazadas en ambos sentidos, préstamos al dueño no negativos, y (como **advertencias**) que el costo de cada unidad coincida con la suma de sus movimientos + costos capitalizados. Las pruebas exigen cero problemas y cero advertencias.
 
 ## 10. Seguridad y privacidad
 
@@ -163,3 +174,53 @@ Es un archivo `.json` propio:
 - No se registran IMEI ni datos personales en la consola.
 - Las listas y la búsqueda muestran el IMEI enmascarado (`•••1234`). El IMEI completo solo aparece en la ficha de la unidad.
 - Las acciones irreversibles piden confirmación, y las más graves exigen escribir una palabra (BORRAR, REEMPLAZAR o el nombre del inventario).
+
+## 11. Capital del negocio (v2)
+
+```
+Caja calculada        = aportes − retiros ± ajustes de caja − préstamos al dueño + devoluciones del dueño
+                        + cobros − reembolsos (ventas activas) − compras activas − gastos activos
+                        + deudas recibidas (no anuladas) − abonos a capital
+Inventario a costo    = Σ costo de unidades en existencia (base conocida + costos adicionales) + valor de productos por cantidad
+Valor del negocio     = caja + inventario a costo + por cobrar + préstamos al dueño − deudas − saldos a favor de clientes
+Capital aportado      = aportes − retiros + mercancía que ya se tenía (stock inicial a costo)
+Crecimiento           = valor del negocio − capital aportado
+                      = ganancia neta acumulada + ajustes de caja + mercancía encontrada en ajustes   (identidad probada)
+```
+
+- Una compra pagada con deuda resta su total de la caja y la deuda lo suma: el efecto neto es solo lo pagado de contado. Se puede financiar una parte.
+- Un **préstamo al dueño** ("prestado a ti") no cambia el valor del negocio: el dinero sale de la caja pero queda como cuenta por cobrar al dueño. Un **retiro** baja el capital aportado, no el crecimiento.
+- Por inventario o global: los registros con inventario cuentan en su inventario; los generales (sin inventario) solo en "Todos".
+- **Serie mensual:** el valor de cada fin de mes se reconstruye con todos los hechos anteriores (el inventario con los movimientos, sin compras/ventas anuladas). El mes actual usa los valores de hoy.
+- **Métricas:** rentabilidad = ganancia neta del periodo ÷ valor al inicio (o capital aportado si el negocio empezó en el periodo); rotación = costo de lo vendido ÷ inventario promedio; días para recuperar = días del periodo ÷ rotación; dinero dormido = costo de lo que supera su umbral de estancado.
+- **Metas:** valor del negocio o crecimiento, con fecha opcional y ritmo mensual necesario.
+
+## 12. Deudas (v2)
+
+- Tipos: tarjeta de crédito, crédito del proveedor, préstamo de un tercero, otra. `cashIn = true` si el dinero entró a la caja; `false` si pagó una compra.
+- Abono = capital (baja la deuda) + intereses/cuota de manejo (gasto operativo "Intereses y costos financieros", resta de la ganancia). Al llegar a cero, la deuda queda "Pagada". Un abono se puede anular (también su gasto).
+- Anular una compra con deuda exige anular antes sus abonos; la deuda se anula con la compra.
+
+## 13. Precios (v2)
+
+- **Mercado:** registros manuales por `modelo|capacidad|estado` (normalizados), con historial; desactualizado tras N días (30 por defecto).
+- **Tu precio real:** promedio de tus ventas del mismo modelo/capacidad/estado en los últimos N días (90 por defecto), sin lo devuelto.
+- **Mínimo:** costo + margen mínimo (pesos o %; redondeo hacia arriba con tolerancia a coma flotante).
+- **Sugerido:** mercado al día → tu precio real → precio de venta del producto → mercado desactualizado; nunca por debajo del mínimo.
+- **Máximo de compra:** mercado ajustado (− descuento por batería bajo umbral − descuento por pieza genérica × piezas) − margen − gastos esperados; con margen en %: `⌊mercado ajustado × 100 ÷ (100 + %) − gastos⌋`.
+- **Comisión por medio de pago:** `round(pago × % ÷ 100)` se registra como gasto operativo de la venta (editable al cobrar).
+
+## 14. Rentabilidad y proveedores (v2)
+
+- **Ganancia por día por modelo** (equipos con costo y fecha conocidos): Σ ganancia ÷ Σ días en inventario (mínimo 1 día). Rendimiento = ganancia ÷ Σ(costo × días).
+- **Calificación de proveedores (0–100):** margen (2 puntos por 1 %, máx. 40) + rapidez (30 × (1 − días/90)) + calidad (30 − 60 × (devoluciones + reclamos)/ventas − 30 × equipos con piezas genéricas o aviso/comprados). Menos de 3 ventas = "pocos datos".
+
+## 15. Historial de piezas (v2)
+
+Cada unidad guarda una lista de cambios: pieza (batería, pantalla, tapa, cámaras, Face ID/Touch ID, puerto, altavoz, chasis, placa, otra), calidad (original/genérica/no sé), quién (dueño anterior/proveedor/yo/no sé), fecha, aviso de "pieza desconocida" y notas. Anotar piezas **no** cambia costos; solo una reparación pagada (que puede agregar su pieza al historial, enlazada con `repairId`) suma costo.
+
+## 16. Ayuda y modo práctica (v2)
+
+- Contenido en `src/ui/help/content.ts`: manual (artículos con buscador sin tildes y "Llévame ahí"), explicación de cada métrica (ⓘ), ayuda por pantalla (?) y novedades. El manual completo se puede imprimir y se incluye como PDF (`public/manual-inventario-movil.pdf`, generado con `scripts/make-manual-pdf.mjs`).
+- **Modo práctica:** abre otra base de datos (`inventario-movil-practica`) con datos de ejemplo; su copia interna de restauración también es aparte. Los datos reales no se abren mientras se practica.
+- **Novedades:** se muestran una vez tras actualizar (si la base ya tenía datos), comparando con `meta.lastSeenVersion`.

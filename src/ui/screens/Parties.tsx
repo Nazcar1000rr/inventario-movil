@@ -5,6 +5,7 @@ import {
   formatDate,
   formatDateTime,
   getSupplierStats,
+  getSupplierScores,
   normalizeText,
   updateCustomer,
   updateSupplier,
@@ -15,6 +16,7 @@ import { PartyPicker } from '../components/pickers';
 import { Badge, Card, Empty, Field, FormError, KV, Loading, Page, Paged, TextInput } from '../components/ui';
 import { navigate } from '../router';
 import { db, useAction, useLive } from '../store';
+import { L } from '../components/help';
 
 export function PartiesScreen({ type }: { type: 'supplier' | 'customer' }) {
   const list = useLive(async (d) => (type === 'supplier' ? await d.suppliers.toArray() : await d.customers.toArray()), [type]);
@@ -29,7 +31,7 @@ export function PartiesScreen({ type }: { type: 'supplier' | 'customer' }) {
       .sort((a, b) => Number(a.archived) - Number(b.archived) || a.name.localeCompare(b.name, 'es'));
   }, [list, q]);
   return (
-    <Page
+    <Page help="parties"
       title={title}
       back="/mas"
       actions={
@@ -87,7 +89,8 @@ export function PartyDetailScreen({ type, id }: { type: 'supplier' | 'customer';
         if (!s) return null;
         const stats = await getSupplierStats(d, id);
         const purchases = (await d.purchases.where('supplierId').equals(id).toArray()).sort((a, b) => (a.date < b.date ? 1 : -1));
-        return { kind: 'supplier' as const, party: s, stats, purchases };
+        const score = (await getSupplierScores(d, null)).find((x) => x.supplierId === id) ?? null;
+        return { kind: 'supplier' as const, party: s, stats, purchases, score };
       }
       const c = await d.customers.get(id);
       if (!c) return null;
@@ -114,7 +117,7 @@ export function PartyDetailScreen({ type, id }: { type: 'supplier' | 'customer';
     if (ok) setEdit(null);
   };
   return (
-    <Page title={p.name} subtitle={type === 'supplier' ? 'Proveedor' : 'Comprador'} back={base}>
+    <Page title={p.name} subtitle={type === 'supplier' ? 'Proveedor' : 'Comprador'} help="parties" back={base}>
       {data.kind === 'supplier' ? (
         <Card title="Resumen">
           <KV
@@ -127,7 +130,30 @@ export function PartyDetailScreen({ type, id }: { type: 'supplier' | 'customer';
           />
           <p className="tiny muted" style={{ marginTop: 8 }}>Calculado a partir de las compras registradas (sin las anuladas).</p>
         </Card>
-      ) : (
+      ) : null}
+      {data.kind === 'supplier' && data.score ? (
+        <Card title={<h2><L k="supplierScore">Calificación</L></h2>}>
+          <KV
+            rows={[
+              ['Puntaje', data.score.score === null ? 'Sin ventas todavía' : <strong key="sc">{data.score.score}/100{data.score.enoughData ? '' : ' (pocos datos)'}</strong>, true],
+              ...(data.score.scoreParts
+                ? ([
+                    ['Margen (de 40)', String(data.score.scoreParts.margin)],
+                    ['Rapidez (de 30)', String(data.score.scoreParts.speed)],
+                    ['Calidad (de 30)', String(data.score.scoreParts.quality)],
+                  ] as [string, string][])
+                : []),
+              ['Equipos comprados', `${data.score.unitsBought} · ${data.score.inStock} en existencia`],
+              ['Ventas de sus equipos', String(data.score.sold)],
+              ['Ganancia promedio', formatCOP(data.score.avgProfit)],
+              ['Días promedio para vender', data.score.avgDays === null ? '—' : String(data.score.avgDays).replace('.', ',')],
+              ['Devoluciones / reclamos', `${data.score.returns} / ${data.score.claims}`],
+              ['Con piezas genéricas o aviso', String(data.score.partIssues)],
+            ]}
+          />
+        </Card>
+      ) : null}
+      {data.kind === 'customer' ? (
         <Card title="Resumen">
           <KV
             rows={[
@@ -137,7 +163,7 @@ export function PartyDetailScreen({ type, id }: { type: 'supplier' | 'customer';
             ]}
           />
         </Card>
-      )}
+      ) : null}
       <Card title="Datos">
         <form
           className="stack"

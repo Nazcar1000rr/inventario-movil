@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { App as CapApp } from '@capacitor/app';
 import { errorMessage, initDatabase } from './core';
 import { App } from './ui/App';
-import { db, closeTopModal } from './ui/store';
+import { db, closeTopModal, practice } from './ui/store';
+import { seedPracticeData } from './ui/practice';
 import { goBack, canGoBack, currentPath } from './ui/router';
 import { isNative, requestPersistence } from './ui/platform';
 import './ui/styles.css';
@@ -18,7 +19,7 @@ function fatal(msg: string) {
           <p className="strong">No se pudo abrir la base de datos local</p>
           <p className="small">{msg}</p>
           <p className="small">
-            Si usa Safari en modo privado, ábralo en una pestaña normal o desde la app instalada. Sus datos no se han modificado.
+            Si usas Safari en modo privado, ábrelo en una pestaña normal o desde la app instalada. Tus datos no se han modificado.
           </p>
           <button className="btn" onClick={() => location.reload()}>
             Reintentar
@@ -37,6 +38,7 @@ async function start() {
   try {
     await db.open();
     await initDatabase(db);
+    if (practice) await seedPracticeData(db);
   } catch (e) {
     fatal(errorMessage(e));
     return;

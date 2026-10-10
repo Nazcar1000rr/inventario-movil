@@ -43,20 +43,21 @@ export async function createExpense(db: AppDB, input: ExpenseInput): Promise<Exp
   const date = assertDate(input.date, 'date', 'Fecha del gasto');
   const amount = assertMoney(input.amount, 'amount', 'Valor del gasto', false);
   const category = cleanStr(input.category, 40);
-  if (!category) fail('required', 'Seleccione una categoría.', 'category');
+  if (!category) fail('required', 'Elige una categoría.', 'category');
   const treatment: ExpenseTreatment = input.treatment === 'capitalized' ? 'capitalized' : 'operating';
   return tx(db, async () => {
     if (!(await claimOp(db, input.opId))) return null;
     let inventoryId = input.inventoryId ?? null;
     let productId = input.productId ?? null;
     const unitId = input.unitId ?? null;
+    const expenseId = newId();
     if (inventoryId && !(await db.inventories.get(inventoryId))) fail('not_found', 'El inventario no existe.', 'inventoryId');
     if (treatment === 'capitalized') {
       if (unitId) {
         const u = await db.units.get(unitId);
         if (!u) fail('not_found', 'La unidad no existe.', 'unitId');
         if (!['available', 'in_review', 'damaged'].includes(u.status))
-          fail('not_in_stock', `La unidad ${u.code} ya no está en existencia: registre el gasto como operativo.`, 'treatment');
+          fail('not_in_stock', `La unidad ${u.code} ya no está en existencia: registra el gasto como operativo.`, 'treatment');
         await db.units.update(u.id, { extraCost: u.extraCost + amount, updatedAt: nowISO() });
         inventoryId = u.inventoryId;
         productId = u.productId;
@@ -70,7 +71,7 @@ export async function createExpense(db: AppDB, input: ExpenseInput): Promise<Exp
       } else if (productId) {
         const p = await db.products.get(productId);
         if (!p) fail('not_found', 'El producto no existe.', 'productId');
-        if (p.tracking !== 'quantity') fail('invalid', 'Para productos por unidad, elija la unidad específica.', 'unitId');
+        if (p.tracking !== 'quantity') fail('invalid', 'Para productos por unidad, elige la unidad específica.', 'unitId');
         if (p.qty - p.unknownCostQty <= 0)
           fail('no_stock', `"${p.name}" no tiene existencias con costo conocido a las que sumar el gasto.`, 'productId');
         await db.products.update(p.id, { stockValue: p.stockValue + amount, updatedAt: nowISO() });
@@ -86,7 +87,7 @@ export async function createExpense(db: AppDB, input: ExpenseInput): Promise<Exp
           unknownDelta: 0,
           writeOff: 0,
           refType: 'expense',
-          refId: null,
+          refId: expenseId,
           notes: `Costo adicional capitalizado: ${category}`,
         });
       } else {
@@ -94,7 +95,7 @@ export async function createExpense(db: AppDB, input: ExpenseInput): Promise<Exp
       }
     }
     const e: Expense = {
-      id: newId(),
+      id: expenseId,
       date,
       amount,
       category,
@@ -129,7 +130,8 @@ export async function voidExpense(db: AppDB, id: ID): Promise<void> {
     if (!e) fail('not_found', 'El gasto no existe.');
     if (e.status === 'voided') return;
     if (e.claimId || e.repairId)
-      fail('linked', 'Este gasto pertenece a un reclamo o reparación; modifíquelo desde allí.');
+      fail('linked', 'Este gasto pertenece a un reclamo o reparación; modifícalo desde allí.');
+    if (e.debtId) fail('linked', 'Este gasto son intereses de un abono a una deuda; anula el abono desde Deudas.');
     if (e.treatment === 'capitalized') {
       if (e.unitId) {
         const u = (await db.units.get(e.unitId))!;

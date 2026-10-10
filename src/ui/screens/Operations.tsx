@@ -32,7 +32,7 @@ export function OperationsScreen({ tab }: { tab: Tab }) {
   const ids = scope.inventoryIds;
   const setTab = (t: Tab) => navigate(`/operaciones?tab=${t}`, { replace: true });
   return (
-    <Page
+    <Page help="operations"
       title="Operaciones"
       actions={
         <button className="icon-btn" aria-label={tab === 'ventas' ? 'Nueva venta' : tab === 'compras' ? 'Nueva compra' : 'Nuevo gasto'} onClick={() => navigate(tab === 'ventas' ? '/ventas/nueva' : tab === 'compras' ? '/compras/nueva' : '/gastos/nuevo')}>
@@ -222,7 +222,7 @@ export function ExpenseFormScreen({ inventoryId }: { inventoryId: string | null 
   const [opId, setOpId] = useState(newOpId);
   const act = useAction();
   return (
-    <Page title="Registrar gasto" back="/operaciones?tab=gastos">
+    <Page title="Registrar gasto" help="expense-form" back="/operaciones?tab=gastos">
       <Notice>
         Gastos generales del negocio (se restan en la ganancia neta). Para sumar un costo a una unidad concreta (reparación, transporte de ese equipo), hágalo desde la ficha de la unidad: así no se resta dos veces.
       </Notice>

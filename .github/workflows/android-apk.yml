@@ -102,5 +102,5 @@ jobs:
           gh release create "$TAG" inventario-movil.apk \
             --target "${{ github.sha }}" \
             --title "Inventario Móvil ${VERSION} (compilación ${{ github.run_number }})" \
-            --notes "APK firmado. Para actualizar, instálelo encima de la versión anterior (no desinstale): así se conservan los datos." \
+            --notes "APK firmado. Para actualizar, instálalo encima de la versión anterior (no desinstales): así se conservan los datos. Antes de actualizar, haz un respaldo." \
             --latest

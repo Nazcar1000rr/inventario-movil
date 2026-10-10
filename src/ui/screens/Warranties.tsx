@@ -47,7 +47,7 @@ export function WarrantiesScreen() {
     [data, filter],
   );
   return (
-    <Page title="Garantías" back="/mas">
+    <Page title="Garantías" help="warranties" back="/mas">
       <Chips
         label="Filtro"
         value={filter}
@@ -234,7 +234,7 @@ function ClaimSheet({ warrantyId, claim, onClose }: { warrantyId: ID; claim: War
       <Field label="Resolución" htmlFor="cl-res" hint="Revisión, reparación, cambio, devolución…">
         <TextInput id="cl-res" value={resolution} onChange={(e) => setResolution(e.target.value)} />
       </Field>
-      <Field label="Costo para usted" htmlFor="cl-cost" hint="Se registra como gasto (categoría Garantía) una sola vez.">
+      <Field label="Costo para ti" htmlFor="cl-cost" hint="Se registra como gasto (categoría Garantía) una sola vez.">
         <MoneyInput id="cl-cost" value={cost} onChange={setCost} />
       </Field>
       <Field label="Observaciones" htmlFor="cl-notes">

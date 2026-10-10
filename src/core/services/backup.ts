@@ -1,5 +1,15 @@
 import Dexie from 'dexie';
-import { AppDB, DATA_TABLES, DB_SCHEMA_VERSION, type TableName } from '../db';
+import {
+  AppDB,
+  DATA_TABLES,
+  DB_SCHEMA_VERSION,
+  TABLES_V1,
+  alignUnitMovementV2,
+  upgradePurchaseV2,
+  upgradeSettingsV2,
+  upgradeUnitV2,
+  type TableName,
+} from '../db';
 import { AppError, fail, nowISO } from '../util';
 import { verifyIntegrity, type IntegrityReport } from './integrity';
 
@@ -61,6 +71,11 @@ export const TABLE_LABEL: Partial<Record<TableName, string>> = {
   consolidatedViews: 'Vistas consolidadas',
   movements: 'Movimientos',
   catalogModels: 'Modelos del catálogo',
+  capital: 'Capital (aportes y retiros)',
+  debts: 'Deudas',
+  debtPayments: 'Abonos a deudas',
+  marketPrices: 'Precios de mercado',
+  goals: 'Metas',
 };
 
 /* ---------------- Codificación ---------------- */
@@ -210,11 +225,42 @@ export interface ParsedBackup {
 
 export type BackupMigration = (tables: Tables) => Tables;
 
+type Row = Record<string, unknown>;
+
 /**
  * Migraciones de respaldos antiguos: clave = versión de origen; convierte a versión + 1.
- * Ejemplo para una futura versión 2:  1: (t) => ({ ...t, units: t.units.map((u) => ({ ...u, nuevoCampo: null })) })
+ * Hacen exactamente lo mismo que la migración de la base de datos (db.ts), para que un respaldo
+ * de la v1 restaurado en la v2 quede igual que una instalación v1 actualizada.
  */
-export const BACKUP_MIGRATIONS: Record<number, BackupMigration> = {};
+export const BACKUP_MIGRATIONS: Record<number, BackupMigration> = {
+  1: (t) => {
+    const units = (t.units as Row[]).map((u) => upgradeUnitV2({ ...u }));
+    const byId = new Map(units.map((u) => [u.id as string, u]));
+    const movements = (t.movements as Row[]).map((m) => {
+      const c = { ...m };
+      const u = typeof c.unitId === 'string' ? byId.get(c.unitId) : undefined;
+      if (u) alignUnitMovementV2(c, u);
+      return c;
+    });
+    return {
+      ...t,
+      units,
+      movements,
+      purchases: (t.purchases as Row[]).map((p) => upgradePurchaseV2({ ...p })),
+      settings: (t.settings as Row[]).map((st) => upgradeSettingsV2({ ...st })),
+      capital: [],
+      debts: [],
+      debtPayments: [],
+      marketPrices: [],
+      goals: [],
+    };
+  },
+};
+
+/** Tablas que debe traer un respaldo según la versión de datos con la que se creó. */
+export function tablesForSchema(version: number): readonly string[] {
+  return version <= 1 ? TABLES_V1 : DATA_TABLES;
+}
 
 export function migrateTables(tables: Tables, fromVersion: number, toVersion = DB_SCHEMA_VERSION, migrations = BACKUP_MIGRATIONS): Tables {
   let t = tables;
@@ -236,11 +282,11 @@ export async function parseBackup(text: string, password?: string, migrations = 
   if (!env || typeof env !== 'object' || env.format !== BACKUP_FORMAT)
     fail('wrong_format', 'El archivo no es un respaldo de esta aplicación.');
   if (typeof env.formatVersion !== 'number' || env.formatVersion > BACKUP_FORMAT_VERSION)
-    fail('newer_format', 'El respaldo fue creado con una versión más nueva de la app. Actualice la app antes de importarlo.');
+    fail('newer_format', 'El respaldo fue creado con una versión más nueva de la app. Actualiza la app antes de importarlo.');
   if (typeof env.schemaVersion !== 'number' || env.schemaVersion < 1)
     fail('bad_header', 'El encabezado del respaldo está dañado.');
   if (env.schemaVersion > DB_SCHEMA_VERSION)
-    fail('newer_schema', 'El respaldo contiene datos de una versión más nueva de la app. Actualice la app antes de importarlo.');
+    fail('newer_schema', 'El respaldo contiene datos de una versión más nueva de la app. Actualiza la app antes de importarlo.');
 
   let payload: BackupPayload;
   let checksum: string;
@@ -271,13 +317,16 @@ export async function parseBackup(text: string, password?: string, migrations = 
   if (!payload || typeof payload !== 'object' || !payload.tables || !payload.counts) fail('corrupt', 'El contenido del respaldo está incompleto.');
 
   let tables = decodeValue(payload.tables) as Tables;
-  for (const t of DATA_TABLES) {
-    if (!Array.isArray(tables[t])) fail('missing_table', `El respaldo está incompleto: falta la sección "${TABLE_LABEL[t] ?? t}".`);
+  for (const t of tablesForSchema(env.schemaVersion)) {
+    const label = TABLE_LABEL[t as TableName] ?? t;
+    if (!Array.isArray(tables[t])) fail('missing_table', `El respaldo está incompleto: falta la sección "${label}".`);
     if (payload.counts[t] !== tables[t].length)
-      fail('count_mismatch', `El respaldo está incompleto: la sección "${TABLE_LABEL[t] ?? t}" no tiene la cantidad esperada de registros.`);
+      fail('count_mismatch', `El respaldo está incompleto: la sección "${label}" no tiene la cantidad esperada de registros.`);
   }
   const migratedFrom = env.schemaVersion < DB_SCHEMA_VERSION ? env.schemaVersion : null;
   tables = migrateTables(tables, env.schemaVersion, DB_SCHEMA_VERSION, migrations);
+  for (const t of DATA_TABLES)
+    if (!Array.isArray(tables[t])) fail('missing_table', `El respaldo está incompleto: falta la sección "${TABLE_LABEL[t] ?? t}".`);
   validateTables(tables);
 
   return {
@@ -322,13 +371,18 @@ const PK: Record<TableName, string> = {
   photos: 'id',
   consolidatedViews: 'id',
   history: 'id',
+  capital: 'id',
+  debts: 'id',
+  debtPayments: 'id',
+  marketPrices: 'id',
+  goals: 'id',
 };
 
 const SPEC: Partial<Record<TableName, Record<string, FieldType>>> = {
   inventories: { name: 'str', mode: 'str', archived: 'bool', createdAt: 'iso' },
   products: { inventoryId: 'str', kind: 'str', tracking: 'str', name: 'str', qty: 'int', stockValue: 'int', unknownCostQty: 'int', archived: 'bool' },
-  units: { productId: 'str', inventoryId: 'str', code: 'str', status: 'str', acquiredAt: 'iso?', availableSince: 'iso?', baseCost: 'int?', extraCost: 'int', cycle: 'int', saleId: 'str?' },
-  purchases: { opId: 'str', inventoryId: 'str', date: 'iso', subtotal: 'int', extraCosts: 'int', total: 'int', status: 'str' },
+  units: { productId: 'str', inventoryId: 'str', code: 'str', status: 'str', acquiredAt: 'iso?', availableSince: 'iso?', baseCost: 'int?', extraCost: 'int', cycle: 'int', saleId: 'str?', partsHistory: 'arr' },
+  purchases: { opId: 'str', inventoryId: 'str', date: 'iso', subtotal: 'int', extraCosts: 'int', total: 'int', status: 'str', paymentSource: 'str', debtId: 'str?' },
   purchaseLines: { purchaseId: 'str', productId: 'str', quantity: 'int', price: 'int', totalCost: 'int', unitIds: 'arr' },
   sales: { opId: 'str', inventoryId: 'str', date: 'iso', subtotal: 'int', discount: 'int', total: 'int', status: 'str' },
   saleLines: { saleId: 'str', productId: 'str', unitId: 'str?', quantity: 'int', unitPrice: 'int', netAmount: 'int', cogs: 'int', cogsUnknownQty: 'int', returnedQty: 'int' },
@@ -347,6 +401,11 @@ const SPEC: Partial<Record<TableName, Record<string, FieldType>>> = {
   counters: { value: 'int' },
   meta: { value: 'str' },
   history: { at: 'iso', entityId: 'str', summary: 'str' },
+  capital: { opId: 'str', inventoryId: 'str?', kind: 'str', date: 'iso', amount: 'int', status: 'str' },
+  debts: { opId: 'str', inventoryId: 'str?', kind: 'str', creditor: 'str', date: 'iso', principal: 'int', cashIn: 'bool', purchaseId: 'str?', status: 'str' },
+  debtPayments: { opId: 'str', debtId: 'str', date: 'iso', principal: 'int', interest: 'int', expenseId: 'str?' },
+  marketPrices: { key: 'str', model: 'str', capacity: 'str', condition: 'str', price: 'int', date: 'iso' },
+  goals: { inventoryId: 'str?', name: 'str', metric: 'str', target: 'int', dueDate: 'iso?', status: 'str' },
 };
 
 function checkType(v: unknown, t: FieldType): boolean {
@@ -421,7 +480,9 @@ async function businessCounts(db: AppDB): Promise<Record<string, number>> {
 }
 
 export function hasBusinessData(counts: Record<string, number>): boolean {
-  return ['inventories', 'products', 'units', 'purchases', 'sales', 'expenses', 'suppliers', 'customers'].some((t) => (counts[t] ?? 0) > 0);
+  return ['inventories', 'products', 'units', 'purchases', 'sales', 'expenses', 'suppliers', 'customers', 'capital', 'debts', 'marketPrices'].some(
+    (t) => (counts[t] ?? 0) > 0,
+  );
 }
 
 async function writeTables(db: AppDB, tables: Tables): Promise<void> {

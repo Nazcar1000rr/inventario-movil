@@ -86,6 +86,38 @@ export interface Inspection {
   notes: string;
 }
 
+/** Estados estándar del equipo. Se permiten otros textos configurables. */
+export const CONDITIONS = ['Nuevo', 'Usado', 'Restaurado'] as const;
+
+export type PartKey =
+  | 'battery'
+  | 'screen'
+  | 'back'
+  | 'rear_camera'
+  | 'front_camera'
+  | 'biometric'
+  | 'port'
+  | 'speaker'
+  | 'housing'
+  | 'board'
+  | 'other';
+
+export type PartQuality = 'original' | 'generic' | 'unknown';
+export type PartChangedBy = 'previous_owner' | 'supplier' | 'me' | 'unknown';
+
+export interface PartChange {
+  id: ID;
+  part: PartKey;
+  label: string; // descripción libre (obligatoria para "other")
+  quality: PartQuality;
+  by: PartChangedBy;
+  date: ISODate | null;
+  /** El iPhone muestra el aviso "pieza desconocida" / "pieza no genuina" en Ajustes. */
+  unknownPartWarning: boolean;
+  notes: string;
+  repairId: ID | null; // si viene de una reparación pagada registrada en la app
+}
+
 export interface Unit {
   id: ID;
   productId: ID;
@@ -112,6 +144,8 @@ export interface Unit {
   condition: string; // nuevo | usado | reacondicionado | otro texto
   batteryHealth: number | null;
   inspection: Inspection | null;
+  /** Historial de reparaciones y cambios de piezas del equipo (incluye las hechas antes de comprarlo). */
+  partsHistory: PartChange[];
   defects: string;
   replacedParts: string;
   includedAccessories: string;
@@ -159,6 +193,9 @@ export interface Purchase {
   extraCosts: Money; // gastos atribuibles a la compra (transporte, etc.), se capitalizan
   allocation: AllocationMethod;
   total: Money;
+  /** cash = pagada con dinero de la caja; debt = pagada con deuda (tarjeta de crédito, crédito del proveedor...). */
+  paymentSource: 'cash' | 'debt';
+  debtId: ID | null;
   status: OpStatus;
   voidedAt: ISODate | null;
   voidReason: string;
@@ -272,6 +309,10 @@ export interface Expense {
   productId: ID | null;
   claimId: ID | null;
   repairId: ID | null;
+  /** Intereses o costos financieros de una deuda. */
+  debtId?: ID | null;
+  /** Comisión automática del medio de pago (datáfono, etc.). */
+  paymentFee?: boolean;
   status: OpStatus;
   createdAt: ISODate;
 }
@@ -383,7 +424,24 @@ export interface ConsolidatedView {
 export interface HistoryEntry {
   id: ID;
   at: ISODate;
-  entityType: 'inventory' | 'product' | 'unit' | 'purchase' | 'sale' | 'expense' | 'warranty' | 'settings' | 'backup' | 'view' | 'supplier' | 'customer' | 'catalog';
+  entityType:
+    | 'inventory'
+    | 'product'
+    | 'unit'
+    | 'purchase'
+    | 'sale'
+    | 'expense'
+    | 'warranty'
+    | 'settings'
+    | 'backup'
+    | 'view'
+    | 'supplier'
+    | 'customer'
+    | 'catalog'
+    | 'capital'
+    | 'debt'
+    | 'price'
+    | 'goal';
   entityId: ID;
   inventoryId: ID | null;
   action: string;
@@ -395,15 +453,122 @@ export interface Counter {
   value: number;
 }
 
+export type MarginType = 'percent' | 'amount';
+
+export interface PricingSettings {
+  /** Margen mínimo sobre el costo para el "precio mínimo" (aviso al vender por debajo). */
+  minMarginType: MarginType;
+  minMarginValue: number;
+  /** Margen deseado sobre el costo para calcular el "precio máximo de compra". */
+  targetMarginType: MarginType;
+  targetMarginValue: number;
+  /** Gastos esperados por equipo al comprar (transporte, alistamiento...). */
+  expectedCosts: Money;
+  /** Descuento opcional si la batería está por debajo de un porcentaje (null = desactivado). */
+  batteryThreshold: number | null;
+  batteryDiscount: Money;
+  /** Descuento opcional por cada pieza genérica o con aviso de pieza desconocida (0 = desactivado). */
+  genericPartDiscount: Money;
+  /** Días tras los cuales un precio de mercado se considera desactualizado. */
+  marketStaleDays: number;
+  /** Ventana de días para calcular "tu precio real" (promedio de tus ventas). */
+  recentSalesDays: number;
+}
+
 export interface Settings {
   key: 'app';
   businessName: string;
   defaultMode: InventoryMode;
   prefixes: { iphone: string; phone: string; audio: string; accessory: string; other: string };
+  /** Avisos de productos estancados (opcional). */
+  staleEnabled: boolean;
   staleDays: number;
+  /** Umbral específico para equipos nuevos (null = usar el general). */
+  staleDaysNew: number | null;
+  /** Umbral específico para usados y restaurados (null = usar el general). */
+  staleDaysUsed: number | null;
   warrantyAlertDays: number;
   backupReminderDays: number;
   conditions: string[];
+  pricing: PricingSettings;
+  /** Comisión (%) por medio de pago, p. ej. { Tarjeta: 3.5 }. 0 = sin comisión. */
+  paymentFees: Record<string, number>;
+  /** Mostrar la lista de "Primeros pasos" en Inicio. */
+  showGettingStarted: boolean;
+}
+
+/* ---------------- Capital, deudas, precios y metas (v2) ---------------- */
+
+export type CapitalKind = 'contribution' | 'withdrawal' | 'cash_adjustment' | 'owner_loan' | 'owner_loan_repayment';
+
+export interface CapitalMovement {
+  id: ID;
+  opId: string;
+  /** null = capital general del negocio (no asignado a un inventario). */
+  inventoryId: ID | null;
+  kind: CapitalKind;
+  date: ISODate;
+  /** Siempre positivo, excepto en ajustes de caja (negativo = faltante). */
+  amount: Money;
+  notes: string;
+  status: OpStatus;
+  createdAt: ISODate;
+}
+
+export type DebtKind = 'credit_card' | 'supplier' | 'loan' | 'other';
+
+export interface Debt {
+  id: ID;
+  opId: string;
+  inventoryId: ID | null;
+  kind: DebtKind;
+  creditor: string;
+  description: string;
+  date: ISODate;
+  principal: Money;
+  /** true si el dinero prestado entró a la caja (préstamo en efectivo). false si pagó una compra directamente. */
+  cashIn: boolean;
+  purchaseId: ID | null;
+  status: 'open' | 'paid' | 'voided';
+  notes: string;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export interface DebtPayment {
+  id: ID;
+  opId: string;
+  debtId: ID;
+  inventoryId: ID | null;
+  date: ISODate;
+  principal: Money; // abono a capital (reduce la deuda)
+  interest: Money; // intereses/cuota de manejo (gasto financiero)
+  expenseId: ID | null;
+  notes: string;
+  createdAt: ISODate;
+}
+
+export interface MarketPrice {
+  id: ID;
+  key: string; // modelo|capacidad|estado normalizado
+  model: string;
+  capacity: string;
+  condition: string;
+  price: Money;
+  date: ISODate;
+  notes: string;
+  createdAt: ISODate;
+}
+
+export interface Goal {
+  id: ID;
+  inventoryId: ID | null;
+  name: string;
+  metric: 'business_value' | 'growth';
+  target: Money;
+  dueDate: ISODate | null;
+  status: 'active' | 'archived';
+  createdAt: ISODate;
 }
 
 export interface MetaRecord {

@@ -38,7 +38,7 @@ export function errorMessage(e: unknown): string {
     if (name === 'QuotaExceededError') return 'No hay espacio suficiente en el dispositivo para guardar los datos.';
     if (name === 'ConstraintError') return 'El registro ya existe (dato duplicado).';
     if (name === 'DatabaseClosedError' || name === 'OpenFailedError')
-      return 'No se pudo abrir la base de datos local. Cierre y vuelva a abrir la app.';
+      return 'No se pudo abrir la base de datos local. Cierra y vuelve a abrir la app.';
   }
   if (e instanceof Error) return e.message;
   return 'Error desconocido.';
@@ -76,10 +76,10 @@ export function isMoney(v: unknown): v is Money {
 }
 
 export function assertMoney(v: unknown, field: string, label: string, allowZero = true): Money {
-  if (!isMoney(v)) fail('invalid_amount', `${label}: ingrese un valor entero en pesos.`, field);
+  if (!isMoney(v)) fail('invalid_amount', `${label}: escribe un valor entero en pesos.`, field);
   if (v < 0) fail('negative_amount', `${label} no puede ser negativo.`, field);
   if (!allowZero && v === 0) fail('zero_amount', `${label} debe ser mayor que cero.`, field);
-  if (v > 100_000_000_000) fail('amount_too_large', `${label} es demasiado alto. Revise el valor.`, field);
+  if (v > 100_000_000_000) fail('amount_too_large', `${label} es demasiado alto. Revisa el valor.`, field);
   return v;
 }
 
@@ -222,4 +222,20 @@ export function cleanStr(v: unknown, max = 500): string {
 
 export function cleanIdentifier(v: unknown): string {
   return cleanStr(v, 40).replace(/\s+/g, '').toUpperCase();
+}
+
+/** "1 día", "2,5 días". */
+export function daysText(n: number): string {
+  return `${String(n).replace('.', ',')} ${n === 1 ? 'día' : 'días'}`;
+}
+
+/** Compara versiones tipo "2.0.0" (negativo si a < b, 0 si son iguales, positivo si a > b). */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  const pb = b.split(/[.-]/).map((x) => Number.parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
 }

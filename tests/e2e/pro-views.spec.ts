@@ -23,13 +23,17 @@ test('modo profesional: códigos, IMEI, inspección, reparación y cambio de mod
   await expect(page.getByText('86% (ingresado manualmente)')).toBeVisible();
 
   // Reparación capitalizada: el costo de la unidad sube
-  await page.getByRole('button', { name: 'Agregar' }).click();
-  const rep = page.getByRole('dialog', { name: 'Registrar reparación' });
+  await page.locator('section').filter({ hasText: 'Reparaciones pagadas' }).getByRole('button', { name: 'Agregar' }).click();
+  const rep = page.getByRole('dialog', { name: 'Registrar reparación pagada' });
   await rep.getByLabel('Descripción').fill('Cambio de batería');
+  await rep.getByRole('group', { name: 'Pieza cambiada' }).getByRole('button', { name: 'Batería' }).click();
   await rep.getByLabel('Costo').fill('150000');
   await rep.getByRole('button', { name: 'Guardar reparación' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('$ 3.150.000').first()).toBeVisible(); // 3.000.000 + 150.000
+  // La reparación con pieza queda en el historial de piezas
+  await expect(page.getByTestId('parts-list').getByText('Batería')).toBeVisible();
+  await expect(page.getByTestId('parts-list').getByText('· reparación registrada')).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/pro-unidad.png`, fullPage: true });
 
   // Cambiar a sencillo y volver: los datos siguen ahí
@@ -69,7 +73,7 @@ test('14-15. vista consolidada: suma sin duplicar y vende desde el inventario de
 
   // Vender desde la vista: hay stock en dos inventarios → pide elegir el origen
   await page.getByRole('button', { name: 'Vender' }).click();
-  await expect(page.getByRole('dialog', { name: '¿Desde qué inventario vende?' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '¿Desde qué inventario vendes?' })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: /Inventario A/ }).click();
   await expect(page.locator('#sa-inv')).toHaveValue(a);
   await page.locator('#sa-p-0').fill('2000000');

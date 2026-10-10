@@ -1,4 +1,4 @@
-import type { CatalogModel } from './types';
+import type { CatalogModel, PartChange, PartChangedBy, PartKey, PartQuality } from './types';
 
 /**
  * Catálogo base verificado (octubre de 2026). Fuentes: páginas oficiales/Wikipedia/MacRumors.
@@ -135,3 +135,88 @@ export const INSPECTION_SOURCE_LABEL: Record<string, string> = {
   own: 'Revisado por mí',
   technician: 'Verificado por técnico',
 };
+
+/* ---------------- Historial de reparaciones y piezas (v2) ---------------- */
+
+export const PART_KEYS: PartKey[] = [
+  'battery',
+  'screen',
+  'back',
+  'rear_camera',
+  'front_camera',
+  'biometric',
+  'port',
+  'speaker',
+  'housing',
+  'board',
+  'other',
+];
+
+export const PART_LABEL: Record<PartKey, string> = {
+  battery: 'Batería',
+  screen: 'Pantalla',
+  back: 'Tapa trasera',
+  rear_camera: 'Cámara trasera',
+  front_camera: 'Cámara frontal',
+  biometric: 'Face ID / Touch ID',
+  port: 'Puerto de carga',
+  speaker: 'Altavoz / auricular',
+  housing: 'Chasis / carcasa',
+  board: 'Placa',
+  other: 'Otra',
+};
+
+export const PART_QUALITY_LABEL: Record<PartQuality, string> = {
+  original: 'Original',
+  generic: 'Genérica',
+  unknown: 'No sé',
+};
+
+export const PART_BY_LABEL: Record<PartChangedBy, string> = {
+  previous_owner: 'Dueño anterior',
+  supplier: 'Proveedor',
+  me: 'Yo (en mi negocio)',
+  unknown: 'No sé',
+};
+
+export interface PartsSummary {
+  count: number;
+  generic: number;
+  warnings: number;
+  /** Piezas cambiadas sin calidad conocida. */
+  unknownQuality: number;
+  labels: string[];
+}
+
+export function partLabel(p: Pick<PartChange, 'part' | 'label'>): string {
+  return p.part === 'other' ? p.label || PART_LABEL.other : PART_LABEL[p.part] ?? p.part;
+}
+
+export function partsSummary(parts: PartChange[] | undefined): PartsSummary {
+  const list = parts ?? [];
+  return {
+    count: list.length,
+    generic: list.filter((p) => p.quality === 'generic').length,
+    warnings: list.filter((p) => p.unknownPartWarning).length,
+    unknownQuality: list.filter((p) => p.quality === 'unknown').length,
+    labels: [...new Set(list.map(partLabel))],
+  };
+}
+
+/** Normaliza el estado del equipo (Nuevo / Usado / Restaurado; acepta "reacondicionado"). */
+export function normalizeCondition(c: string | null | undefined): string {
+  const t = (c ?? '').trim();
+  if (!t) return '';
+  const low = t.toLowerCase();
+  if (low === 'nuevo' || low === 'nueva') return 'Nuevo';
+  if (low === 'usado' || low === 'usada') return 'Usado';
+  if (low === 'restaurado' || low === 'restaurada' || low === 'reacondicionado' || low === 'reacondicionada') return 'Restaurado';
+  return t.slice(0, 40);
+}
+
+/** Grupo de estado para umbrales y precios: "new" (Nuevo) o "used" (Usado, Restaurado y otros). Vacío = desconocido. */
+export function conditionGroup(c: string | null | undefined): 'new' | 'used' | 'unknown' {
+  const n = normalizeCondition(c);
+  if (!n) return 'unknown';
+  return n === 'Nuevo' ? 'new' : 'used';
+}

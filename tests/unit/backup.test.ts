@@ -5,6 +5,7 @@ import {
   AppError,
   DB_SCHEMA_VERSION,
   SCHEMA_V1,
+  SCHEMA_V2,
   analyzeImport,
   createBackup,
   createPurchase,
@@ -233,19 +234,20 @@ describe('22. migraciones de esquema', () => {
     expect(() => migrateTables(tables, 1, 4, migrations)).toThrow(AppError);
   });
 
-  it('Dexie actualiza una base existente a una versión nueva conservando los datos', async () => {
+  it('Dexie actualiza una base existente a una versión futura (v3) conservando los datos', async () => {
     const name = 'mig-' + newId();
     const v1 = new AppDB(name);
     await v1.open();
     await v1.inventories.add({ id: 'i1', name: 'Viejo', mode: 'simple', archived: false, archivedAt: null, notes: '', createdAt: D('2026-01-01T00:00:00Z'), updatedAt: D('2026-01-01T00:00:00Z') });
     v1.close();
 
-    class V2 extends Dexie {
+    class V3 extends Dexie {
       constructor() {
         super(name);
         this.version(1).stores(SCHEMA_V1);
-        this.version(2)
-          .stores({ ...SCHEMA_V1, inventories: 'id, name, mode' })
+        this.version(2).stores(SCHEMA_V2);
+        this.version(3)
+          .stores({ ...SCHEMA_V2, inventories: 'id, name, mode' })
           .upgrade(async (tx) => {
             await tx.table('inventories').toCollection().modify((i: Record<string, unknown>) => {
               i.color = 'gris';
@@ -253,9 +255,9 @@ describe('22. migraciones de esquema', () => {
           });
       }
     }
-    const v2 = new V2();
+    const v2 = new V3();
     await v2.open();
-    expect(v2.verno).toBe(2);
+    expect(v2.verno).toBe(3);
     const inv = await v2.table('inventories').get('i1');
     expect(inv).toMatchObject({ name: 'Viejo', color: 'gris' });
     expect(await v2.table('inventories').where('mode').equals('simple').count()).toBe(1);

@@ -14,7 +14,7 @@ import type {
   Unit,
 } from '../types';
 import { allocate, assertDate, assertMoney, assertQty, cleanStr, fail, newId, nowISO } from '../util';
-import { addMovement, logHistory, requireInventory, requireProduct } from './base';
+import { addMovement, getSettings, logHistory, requireInventory, requireProduct } from './base';
 import { claimOp, consumeQuantity, fifoOrder, tx, unitCost } from './stock';
 import { buildWarranty } from './warranties';
 
@@ -49,6 +49,63 @@ export interface SaleInput {
   /** Gastos de la venta (comisión, envío...). Se registran como gastos operativos vinculados. */
   costs?: SaleCostInput[];
   warranty?: { durationValue: number; durationUnit: 'days' | 'months'; conditions?: string } | null;
+  /**
+   * Comisión del medio de pago sobre el pago inicial. undefined = se calcula con el % configurado
+   * para el medio de pago; un número = valor exacto (0 = sin comisión).
+   */
+  initialPaymentFee?: Money | null;
+}
+
+export const PAYMENT_FEE_CATEGORY = 'Comisión medio de pago';
+
+/** % de comisión configurado para un medio de pago (sin distinguir mayúsculas). */
+export function feePercentFor(fees: Record<string, number>, method: string): number {
+  const m = method.trim().toLowerCase();
+  if (!m) return 0;
+  for (const [k, v] of Object.entries(fees)) if (k.trim().toLowerCase() === m) return v;
+  return 0;
+}
+
+/** Comisión estimada (pesos enteros, redondeo normal). */
+export function estimatePaymentFee(fees: Record<string, number>, method: string, amount: Money): Money {
+  const pct = feePercentFor(fees, method);
+  return pct > 0 && amount > 0 ? Math.round((amount * pct) / 100) : 0;
+}
+
+/** Registra la comisión del medio de pago como gasto operativo vinculado a la venta. Uso interno. */
+async function addPaymentFeeExpense(
+  db: AppDB,
+  sale: Pick<Sale, 'id' | 'inventoryId'>,
+  args: { date: ISODate; method: string; amount: Money; fee: Money | null | undefined },
+): Promise<void> {
+  let fee: Money;
+  let pctNote = '';
+  if (args.fee === undefined || args.fee === null) {
+    const settings = await getSettings(db);
+    const pct = feePercentFor(settings.paymentFees, args.method);
+    fee = estimatePaymentFee(settings.paymentFees, args.method, args.amount);
+    pctNote = pct ? ` (${pct} %)` : '';
+  } else fee = assertMoney(args.fee, 'fee', 'Comisión');
+  if (fee <= 0) return;
+  if (fee > args.amount) fail('invalid', 'La comisión no puede ser mayor que el pago.', 'fee');
+  await db.expenses.add({
+    id: newId(),
+    date: args.date,
+    amount: fee,
+    category: PAYMENT_FEE_CATEGORY,
+    notes: `${args.method || 'Pago'}${pctNote} sobre ${args.amount}`,
+    treatment: 'operating',
+    inventoryId: sale.inventoryId,
+    saleId: sale.id,
+    purchaseId: null,
+    unitId: null,
+    productId: null,
+    claimId: null,
+    repairId: null,
+    paymentFee: true,
+    status: 'active',
+    createdAt: nowISO(),
+  });
 }
 
 interface Atom {
@@ -123,12 +180,12 @@ export async function createSale(db: AppDB, input: SaleInput): Promise<Sale> {
   const date = assertDate(input.date, 'date', 'Fecha de venta');
   const discount = assertMoney(input.discount ?? 0, 'discount', 'Descuento');
   const initialPayment = assertMoney(input.initialPayment ?? 0, 'initialPayment', 'Pago recibido');
-  if (!input.lines?.length) fail('required', 'Agregue al menos un producto a la venta.', 'lines');
+  if (!input.lines?.length) fail('required', 'Agrega al menos un producto a la venta.', 'lines');
   input.lines.forEach((l, i) => assertMoney(l.unitPrice, `lines.${i}.unitPrice`, 'Precio de venta'));
   const costs = (input.costs ?? []).filter((c) => c.amount > 0);
   costs.forEach((c, i) => {
     assertMoney(c.amount, `costs.${i}.amount`, 'Gasto de la venta');
-    if (!cleanStr(c.category, 40)) fail('required', 'Indique la categoría del gasto de la venta.', `costs.${i}.category`);
+    if (!cleanStr(c.category, 40)) fail('required', 'Indica la categoría del gasto de la venta.', `costs.${i}.category`);
   });
   const delivery: DeliveryStatus = input.deliveryStatus ?? 'na';
   if (!['na', 'pending', 'delivered'].includes(delivery)) fail('invalid', 'Estado de entrega no válido.', 'deliveryStatus');
@@ -304,6 +361,7 @@ export async function createSale(db: AppDB, input: SaleInput): Promise<Sale> {
         notes: 'Pago al registrar la venta',
         createdAt: nowISO(),
       });
+      await addPaymentFeeExpense(db, sale, { date, method: sale.paymentMethod, amount: initialPayment, fee: input.initialPaymentFee });
     }
 
     // 5) Gastos de la venta (operativos, vinculados a la venta)
@@ -362,7 +420,7 @@ export async function createSale(db: AppDB, input: SaleInput): Promise<Sale> {
 
 export async function addPayment(
   db: AppDB,
-  input: { opId?: string; saleId: ID; amount: Money; date: ISODate; method?: string; notes?: string },
+  input: { opId?: string; saleId: ID; amount: Money; date: ISODate; method?: string; notes?: string; fee?: Money | null },
 ): Promise<void> {
   const amount = assertMoney(input.amount, 'amount', 'Valor del pago', false);
   const date = assertDate(input.date, 'date', 'Fecha del pago');
@@ -387,6 +445,7 @@ export async function addPayment(
       notes: cleanStr(input.notes ?? '', 300),
       createdAt: nowISO(),
     });
+    await addPaymentFeeExpense(db, sale, { date, method: cleanStr(input.method ?? '', 40), amount, fee: input.fee });
     await logHistory(db, {
       entityType: 'sale',
       entityId: sale.id,
@@ -467,7 +526,7 @@ export async function registerReturn(db: AppDB, input: ReturnInput): Promise<Sal
   if (!input.opId) fail('invalid', 'Falta el identificador de la operación.');
   const date = assertDate(input.date, 'date', 'Fecha de devolución');
   const refundAmount = assertMoney(input.refundAmount, 'refundAmount', 'Reembolso');
-  if (!input.lines?.length) fail('required', 'Seleccione lo que se devuelve.', 'lines');
+  if (!input.lines?.length) fail('required', 'Elige lo que se devuelve.', 'lines');
   return tx(db, async () => {
     const existing = await db.returns.where('opId').equals(input.opId).first();
     if (existing) return existing;
@@ -493,7 +552,7 @@ export async function registerReturn(db: AppDB, input: ReturnInput): Promise<Sal
       if (!['available', 'in_review', 'damaged'].includes(rl.destination)) fail('invalid', 'Destino no válido.');
       const p = (await db.products.get(l.productId))!;
       if (p.tracking === 'quantity' && rl.destination === 'in_review')
-        fail('invalid', `"${p.name}" se controla por cantidad: elija "disponible" o "dañado".`);
+        fail('invalid', `"${p.name}" se controla por cantidad: elige "disponible" o "dañado".`);
       const portion = returnPortion(l, q);
       retLines.push({ saleLineId: l.id, unitId: l.unitId, quantity: q, destination: rl.destination, ...portion });
 
@@ -633,13 +692,13 @@ export async function registerReturn(db: AppDB, input: ReturnInput): Promise<Sal
  */
 export async function voidSale(db: AppDB, saleId: ID, reason: string, opts: { voidExpenses?: boolean } = {}): Promise<void> {
   const r = cleanStr(reason, 300);
-  if (!r) fail('required', 'Indique el motivo de la anulación.', 'reason');
+  if (!r) fail('required', 'Escribe el motivo de la anulación.', 'reason');
   await tx(db, async () => {
     const sale = await db.sales.get(saleId);
     if (!sale) fail('not_found', 'La venta no existe.');
     if (sale.status === 'voided') return;
     if ((await db.returns.where('saleId').equals(saleId).count()) > 0)
-      fail('has_returns', 'La venta tiene devoluciones registradas; no se puede anular. Registre una devolución por lo restante.');
+      fail('has_returns', 'La venta tiene devoluciones registradas; no se puede anular. Registra una devolución por lo restante.');
     const lines = await db.saleLines.where('saleId').equals(saleId).toArray();
     const now = nowISO();
     for (const l of lines) {

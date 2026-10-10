@@ -50,7 +50,7 @@ export function InventoriesScreen() {
   const visible = (invs ?? []).filter((i) => showArchived || !i.archived);
   const archivedCount = (invs ?? []).filter((i) => i.archived).length;
   return (
-    <Page
+    <Page help="inventories"
       title="Inventarios"
       actions={
         <button className="icon-btn" aria-label="Nuevo inventario" onClick={() => setCreating(true)}>
@@ -62,7 +62,7 @@ export function InventoriesScreen() {
         <Loading />
       ) : invs.length === 0 ? (
         <Card>
-          <Empty title="Aún no tiene inventarios">
+          <Empty title="Aún no tienes inventarios">
             <button className="btn primary" onClick={() => setCreating(true)}>
               Crear inventario
             </button>
@@ -206,7 +206,7 @@ export function InventoryDetailScreen({ id }: { id: ID }) {
       message: (
         <p>
           {next === 'pro'
-            ? 'Se mostrarán los campos avanzados (códigos, IMEI, inspección, garantías). Podrá completarlos poco a poco; no es obligatorio llenar datos antiguos.'
+            ? 'Se mostrarán los campos avanzados (códigos, IMEI, inspección, garantías). Podrás completarlos poco a poco; no es obligatorio llenar datos antiguos.'
             : 'Se ocultarán los campos avanzados. No se borra nada: los datos profesionales se conservan y vuelven a verse al regresar al modo profesional.'}{' '}
           Los costos, el historial y las estadísticas no cambian.
         </p>
@@ -222,7 +222,7 @@ export function InventoryDetailScreen({ id }: { id: ID }) {
   const archive = async () => {
     const ok = await confirmAction({
       title: inv.archived ? 'Desarchivar inventario' : 'Archivar inventario',
-      message: inv.archived ? 'Volverá a aceptar compras y ventas.' : 'No se borra nada: su historia y estadísticas se conservan, pero no podrá registrar operaciones nuevas hasta desarchivarlo.',
+      message: inv.archived ? 'Volverá a aceptar compras y ventas.' : 'No se borra nada: su historia y estadísticas se conservan, pero no podrás registrar operaciones nuevas hasta desarchivarlo.',
       confirmText: inv.archived ? 'Desarchivar' : 'Archivar',
     });
     if (ok) await act.run(() => setInventoryArchived(db, id, !inv.archived), inv.archived ? 'Inventario desarchivado' : 'Inventario archivado');
@@ -238,10 +238,10 @@ export function InventoryDetailScreen({ id }: { id: ID }) {
           <Notice kind="bad" title="Esta acción no se puede deshacer">
             Se borrarán {impact.products} producto(s), {impact.units} unidad(es), {impact.purchases} compra(s), {impact.sales} venta(s), {impact.expenses} gasto(s) y {impact.warranties} garantía(s) de este inventario. Las cifras financieras de esas operaciones desaparecerán de los informes.
           </Notice>
-          <p className="small">Si solo quiere dejar de usarlo, es mejor archivarlo. Considere hacer un respaldo antes.</p>
+          <p className="small">Si solo quieres dejar de usarlo, es mejor archivarlo. Te recomendamos hacer un respaldo antes.</p>
         </>
       ),
-      input: { label: `Escriba "${inv.name}" para confirmar`, required: true, mustEqual: inv.name },
+      input: { label: `Escribe "${inv.name}" para confirmar`, required: true, mustEqual: inv.name },
     });
     if (!r.ok) return;
     const done = await act.run(() => deleteInventoryPermanently(db, id, r.value).then(() => true));
@@ -252,7 +252,7 @@ export function InventoryDetailScreen({ id }: { id: ID }) {
   };
 
   return (
-    <Page
+    <Page help="inventory"
       title={inv.name}
       subtitle={
         <span className="row">
@@ -274,7 +274,7 @@ export function InventoryDetailScreen({ id }: { id: ID }) {
         />
       }
     >
-      {inv.archived ? <Notice kind="warn" title="Inventario archivado">Solo consulta. Desarchívelo desde el menú ⋮ para registrar operaciones.</Notice> : null}
+      {inv.archived ? <Notice kind="warn" title="Inventario archivado">Solo consulta. Desarchívalo desde el menú ⋮ para registrar operaciones.</Notice> : null}
       <div className="kpis">
         <Kpi label="Disponibles" value={totals.available} money={false} foot={totals.other ? `+${totals.other} en revisión o dañadas` : undefined} />
         <Kpi label="Valor a costo" value={totals.value} foot={totals.unknown ? `⚠ ${totals.unknown} sin costo conocido` : undefined} />

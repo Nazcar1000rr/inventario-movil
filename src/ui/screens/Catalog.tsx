@@ -17,7 +17,7 @@ export function CatalogScreen() {
       .sort((a, b) => a.brand.localeCompare(b.brand) || (a.year ?? 0) - (b.year ?? 0) || a.model.localeCompare(b.model, 'es', { numeric: true }));
   }, [models, q, cat, showHidden]);
   return (
-    <Page
+    <Page help="catalog"
       title="Catálogo de modelos"
       back="/mas"
       actions={
@@ -27,7 +27,7 @@ export function CatalogScreen() {
       }
     >
       <p className="small muted">
-        Lista de referencia para crear productos más rápido. Incluye iPhone desde el X hasta los modelos anunciados en septiembre de 2026 y AirPods. Puede agregar marcas y modelos (Android u otros). El modelo nunca identifica a una unidad física: cada unidad tiene su propio código.
+        Lista de referencia para crear productos más rápido. Incluye iPhone desde el X hasta los modelos anunciados en septiembre de 2026 y AirPods. Puedes agregar marcas y modelos (Android u otros). El modelo nunca identifica a una unidad física: cada unidad tiene su propio código.
       </p>
       <TextInput type="search" placeholder="Buscar modelo" aria-label="Buscar modelo" value={q} onChange={(e) => setQ(e.target.value)} />
       <Chips label="Categoría" value={cat} onChange={setCat} options={[['phone', 'Teléfonos'], ['audio', 'Audífonos'], ['accessory', 'Accesorios'], ['other', 'Otros'], ['all', 'Todos']]} />
@@ -127,7 +127,7 @@ function ModelSheet({ model, onClose }: { model: CatalogModel | null; onClose: (
       <Field label="Capacidades (separadas por comas)" htmlFor="cm-st" hint="Ej.: 128 GB, 256 GB">
         <TextInput id="cm-st" value={storage} onChange={(e) => setStorage(e.target.value)} />
       </Field>
-      {builtin ? <p className="small muted">Los modelos base no se pueden renombrar; puede ocultarlos o ajustar sus capacidades.</p> : null}
+      {builtin ? <p className="small muted">Los modelos base no se pueden renombrar; puedes ocultarlos o ajustar sus capacidades.</p> : null}
       <FormError error={act.field === 'brand' || act.field === 'model' ? null : act.error} />
     </Sheet>
   );

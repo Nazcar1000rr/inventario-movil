@@ -17,6 +17,8 @@ import {
   type Movement,
   type Product,
   type UnitStatus,
+  type PartInput,
+  type UnitDetails,
 } from '../../core';
 import { DaysLabel, InventorySelect, maskImei, ModeBadge, UnitStatusBadge, useDefaultInventory } from '../components/common';
 import { Icon } from '../components/Icon';
@@ -41,7 +43,8 @@ import {
   TextInput,
 } from '../components/ui';
 import { goBack, navigate } from '../router';
-import { db, useAction, useLive } from '../store';
+import { db, useAction, useLive, usePref } from '../store';
+import { ConditionChips, PartsBadges, PartsEditor, STANDARD_CONDITIONS } from '../components/parts';
 import { Kpi } from './Home';
 
 /* ================= Crear / editar producto ================= */
@@ -55,7 +58,7 @@ function ProductCreate({ inventoryId }: { inventoryId: string | null }) {
   const [inv, setInv, invs] = useDefaultInventory(inventoryId);
   const current = invs?.find((i) => i.id === inv);
   return (
-    <Page title="Nuevo producto" back={inv ? `/inventarios/${inv}` : '/inventarios'}>
+    <Page title="Nuevo producto" help="product-form" back={inv ? `/inventarios/${inv}` : '/inventarios'}>
       {!invs ? (
         <Loading />
       ) : invs.filter((i) => !i.archived).length === 0 ? (
@@ -203,14 +206,18 @@ export function ProductDetailScreen({ id }: { id: ID }) {
     [id],
   );
   const [status, setStatus] = useState<'available' | 'in_review' | 'damaged' | 'sold' | 'archived' | 'all'>('available');
+  const [partsFilter, setPartsFilter] = useState<'any' | 'repaired' | 'generic' | 'clean'>('any');
   const [adjust, setAdjust] = useState(false);
   const act = useAction();
 
   const unitsFiltered = useMemo(() => {
     if (!data) return [];
-    const list = status === 'all' ? data.units : data.units.filter((u) => u.status === status);
+    let list = status === 'all' ? data.units : data.units.filter((u) => u.status === status);
+    if (partsFilter === 'repaired') list = list.filter((u) => (u.partsHistory ?? []).length > 0);
+    if (partsFilter === 'generic') list = list.filter((u) => (u.partsHistory ?? []).some((x) => x.quality === 'generic' || x.unknownPartWarning));
+    if (partsFilter === 'clean') list = list.filter((u) => (u.partsHistory ?? []).length === 0);
     return [...list].sort(fifoOrder);
-  }, [data, status]);
+  }, [data, status, partsFilter]);
 
   if (data === undefined) return <Page title="Producto" back="/inventarios"><Loading /></Page>;
   if (data === null) return <Page title="Producto" back="/inventarios"><Empty title="El producto no existe" /></Page>;
@@ -226,7 +233,7 @@ export function ProductDetailScreen({ id }: { id: ID }) {
   const canOperate = !inv.archived && !p.archived;
 
   return (
-    <Page
+    <Page help="product"
       title={p.name}
       subtitle={
         <span className="row">
@@ -293,6 +300,19 @@ export function ProductDetailScreen({ id }: { id: ID }) {
               ['all', `Todas (${units.length})`],
             ]}
           />
+          {units.some((u) => (u.partsHistory ?? []).length) ? (
+            <Chips
+              label="Piezas"
+              value={partsFilter}
+              onChange={setPartsFilter}
+              options={[
+                ['any', 'Todas las piezas'],
+                ['repaired', 'Con piezas cambiadas'],
+                ['generic', 'Genéricas o con aviso'],
+                ['clean', 'Sin cambios registrados'],
+              ]}
+            />
+          ) : null}
           <Card flush>
             <Paged
               items={unitsFiltered}
@@ -311,7 +331,13 @@ export function ProductDetailScreen({ id }: { id: ID }) {
                           {u.status === 'available' || u.status === 'in_review' || u.status === 'damaged' ? <DaysLabel since={u.availableSince} /> : null}
                           {pro && u.imei ? ` · IMEI ${maskImei(u.imei)}` : ''}
                           {u.cycle > 1 ? ` · ciclo ${u.cycle}` : ''}
+                          {u.batteryHealth !== null ? ` · batería ${u.batteryHealth} %` : ''}
                         </span>
+                        {(u.partsHistory ?? []).length ? (
+                          <span style={{ display: 'block', marginTop: 4 }}>
+                            <PartsBadges parts={u.partsHistory} compact />
+                          </span>
+                        ) : null}
                       </span>
                       <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
                         <UnitStatusBadge status={u.status} />
@@ -426,17 +452,15 @@ export function StockEntryScreen({ inventoryId, productId }: { inventoryId: stri
   const [date, setDate] = useState<string | null>(nowISO());
   const [dateUnknown, setDateUnknown] = useState(false);
   const [notes, setNotes] = useState('');
-  const [details, setDetails] = useState<Record<number, { imei: string; serial: string; color: string; condition: string; batteryHealth: number | null }>>({});
+  const [details, setDetails] = useState<Record<number, UnitDetailValue>>({});
+  const [condition, setCondition] = usePref('lastCondition', '');
   const [opId, setOpId] = useState(newOpId);
   const act = useAction();
   const pro = current?.mode === 'pro';
   const validProduct = product && product.inventoryId === inv ? product : null;
 
   const submit = async () => {
-    const units =
-      validProduct?.tracking === 'unit'
-        ? Array.from({ length: qty ?? 0 }, (_, i) => details[i] ?? { imei: '', serial: '', color: '', condition: '', batteryHealth: null })
-        : undefined;
+    const units = validProduct?.tracking === 'unit' ? Array.from({ length: qty ?? 0 }, (_, i) => toUnitDetails(details[i], condition)) : undefined;
     const r = await act.run(
       () =>
         registerInitialStock(db, {
@@ -457,9 +481,9 @@ export function StockEntryScreen({ inventoryId, productId }: { inventoryId: stri
   };
 
   return (
-    <Page title="Ingresar stock existente" back={inv ? `/inventarios/${inv}` : '/'}>
+    <Page title="Ingresar stock existente" help="stock" back={inv ? `/inventarios/${inv}` : '/'}>
       <Notice>
-        Use esta opción para mercancía que ya tenía antes de usar la app. No cuenta como compra del periodo. Si no recuerda el costo o la fecha, márquelos como desconocidos: no se inventan.
+        Usa esta opción para la mercancía que ya tenías antes de usar la app. No cuenta como compra del periodo: en Capital cuenta como mercancía aportada. Si no recuerdas el costo o la fecha, márcalos como desconocidos: no se inventan.
       </Notice>
       {!invs ? (
         <Loading />
@@ -475,7 +499,7 @@ export function StockEntryScreen({ inventoryId, productId }: { inventoryId: stri
             <InventorySelect id="se-inv" value={inv} onChange={(v) => { setInv(v); setPid(null); }} inventories={invs} />
           </Field>
           {current ? (
-            <Field label="Producto" error={act.field === 'productId' ? 'Seleccione un producto.' : null}>
+            <Field label="Producto" error={act.field === 'productId' ? 'Elige un producto.' : null}>
               <button type="button" className="btn block" style={{ justifyContent: 'space-between' }} onClick={() => setPicking(true)}>
                 <span className="ellipsis">{validProduct?.name ?? 'Elegir o crear producto…'}</span>
                 <Icon name="chevron" size={18} />
@@ -498,12 +522,17 @@ export function StockEntryScreen({ inventoryId, productId }: { inventoryId: stri
               <input type="checkbox" checked={dateUnknown} onChange={(e) => setDateUnknown(e.target.checked)} /> Fecha desconocida (se excluye del cálculo de días)
             </label>
           </Field>
-          {pro && validProduct?.tracking === 'unit' && (qty ?? 0) > 0 ? (
+          {validProduct?.tracking === 'unit' ? (
+            <Field label="Estado del equipo" hint="Nuevo, usado o restaurado. Sirve para los precios y los días de estancado.">
+              <ConditionChips value={condition} onChange={setCondition} />
+            </Field>
+          ) : null}
+          {validProduct?.tracking === 'unit' && (qty ?? 0) > 0 ? (
             <details className="more">
-              <summary>Datos por unidad (opcional)</summary>
+              <summary>{pro ? 'IMEI, batería y piezas por equipo (opcional)' : 'Batería y piezas cambiadas por equipo (opcional)'}</summary>
               <div className="stack">
                 {Array.from({ length: Math.min(qty ?? 0, 50) }, (_, i) => (
-                  <UnitDetailFields key={i} index={i} value={details[i]} onChange={(v) => setDetails((d) => ({ ...d, [i]: v }))} />
+                  <UnitDetailFields key={i} index={i} pro={pro} generalCondition={condition} value={details[i]} onChange={(v) => setDetails((d) => ({ ...d, [i]: v }))} />
                 ))}
               </div>
             </details>
@@ -513,7 +542,7 @@ export function StockEntryScreen({ inventoryId, productId }: { inventoryId: stri
           </Field>
           {costUnknown || dateUnknown ? (
             <Notice kind="warn">
-              {costUnknown ? 'Las ganancias de estas unidades se mostrarán como incompletas hasta que complete el costo. ' : ''}
+              {costUnknown ? 'Las ganancias de estas unidades se mostrarán como incompletas hasta que completes el costo. ' : ''}
               {dateUnknown ? 'No se calcularán días en inventario para estas unidades.' : ''}
             </Notice>
           ) : null}
@@ -543,33 +572,59 @@ export interface UnitDetailValue {
   imei: string;
   serial: string;
   color: string;
+  /** Vacío = el estado elegido para todos los equipos. */
   condition: string;
   batteryHealth: number | null;
+  parts: PartInput[];
 }
 
-export function UnitDetailFields({ index, value, onChange }: { index: number; value?: UnitDetailValue; onChange: (v: UnitDetailValue) => void }) {
-  const v = value ?? { imei: '', serial: '', color: '', condition: '', batteryHealth: null };
+export const emptyUnitDetail = (): UnitDetailValue => ({ imei: '', serial: '', color: '', condition: '', batteryHealth: null, parts: [] });
+
+/** Convierte los datos del formulario a los que recibe la lógica, aplicando el estado general si la unidad no tiene uno propio. */
+export function toUnitDetails(v: UnitDetailValue | undefined, generalCondition: string): UnitDetails {
+  const x = v ?? emptyUnitDetail();
+  return { imei: x.imei, serial: x.serial, color: x.color, condition: x.condition || generalCondition, batteryHealth: x.batteryHealth, parts: x.parts };
+}
+
+export function UnitDetailFields({
+  index,
+  value,
+  onChange,
+  pro,
+  generalCondition,
+}: {
+  index: number;
+  value?: UnitDetailValue;
+  onChange: (v: UnitDetailValue) => void;
+  pro: boolean;
+  generalCondition: string;
+}) {
+  const v = value ?? emptyUnitDetail();
   const settings = useLive((d) => d.settings.get('app'));
-  const set = (k: keyof UnitDetailValue, x: string | number | null) => onChange({ ...v, [k]: x });
+  const set = <K extends keyof UnitDetailValue>(k: K, x: UnitDetailValue[K]) => onChange({ ...v, [k]: x });
   return (
     <fieldset className="card stack" style={{ margin: 0 }}>
       <legend className="small strong" style={{ padding: '0 4px' }}>
-        Unidad {index + 1}
+        Equipo {index + 1}
       </legend>
       <div className="grid-2">
-        <Field label="IMEI" htmlFor={`ud-imei-${index}`}>
-          <TextInput id={`ud-imei-${index}`} inputMode="numeric" autoComplete="off" value={v.imei} onChange={(e) => set('imei', e.target.value)} />
-        </Field>
-        <Field label="Serial" htmlFor={`ud-ser-${index}`}>
-          <TextInput id={`ud-ser-${index}`} autoCapitalize="characters" autoComplete="off" value={v.serial} onChange={(e) => set('serial', e.target.value)} />
-        </Field>
-        <Field label="Color" htmlFor={`ud-col-${index}`}>
-          <TextInput id={`ud-col-${index}`} value={v.color} onChange={(e) => set('color', e.target.value)} />
-        </Field>
+        {pro ? (
+          <>
+            <Field label="IMEI" htmlFor={`ud-imei-${index}`}>
+              <TextInput id={`ud-imei-${index}`} inputMode="numeric" autoComplete="off" value={v.imei} onChange={(e) => set('imei', e.target.value)} />
+            </Field>
+            <Field label="Serial" htmlFor={`ud-ser-${index}`}>
+              <TextInput id={`ud-ser-${index}`} autoCapitalize="characters" autoComplete="off" value={v.serial} onChange={(e) => set('serial', e.target.value)} />
+            </Field>
+            <Field label="Color" htmlFor={`ud-col-${index}`}>
+              <TextInput id={`ud-col-${index}`} value={v.color} onChange={(e) => set('color', e.target.value)} />
+            </Field>
+          </>
+        ) : null}
         <Field label="Estado" htmlFor={`ud-cond-${index}`}>
           <select id={`ud-cond-${index}`} className="select" value={v.condition} onChange={(e) => set('condition', e.target.value)}>
-            <option value="">Sin indicar</option>
-            {(settings?.conditions ?? ['Nuevo', 'Usado', 'Reacondicionado']).map((c) => (
+            <option value="">{generalCondition ? `Como arriba (${generalCondition})` : 'Sin indicar'}</option>
+            {(settings?.conditions ?? STANDARD_CONDITIONS).map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
@@ -578,7 +633,10 @@ export function UnitDetailFields({ index, value, onChange }: { index: number; va
           <IntInput id={`ud-bat-${index}`} value={v.batteryHealth} onChange={(x) => set('batteryHealth', x === null ? null : Math.min(100, x))} placeholder="Desconocida" />
         </Field>
       </div>
+      <div className="field">
+        <span className="field-label">Reparaciones y piezas cambiadas</span>
+        <PartsEditor value={v.parts} onChange={(p) => set('parts', p)} />
+      </div>
     </fieldset>
   );
 }
-

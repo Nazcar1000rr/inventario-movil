@@ -8,16 +8,20 @@ import {
   getSoldObservations,
   getTopSellers,
   getUnsoldAging,
+  getProfitPerDay,
+  getSupplierScores,
   KIND_LABEL,
   velocityBy,
   type VelocityStat,
 } from '../../core';
 import { PeriodPicker, ScopeSelect, usePeriod, useScope } from '../components/common';
-import { Badge, Card, Empty, KV, Loading, Notice, Page, Paged, Segmented } from '../components/ui';
+import { Badge, Card, Chips, Empty, KV, Loading, Notice, Page, Paged } from '../components/ui';
+import { Icon } from '../components/Icon';
+import { InfoTip, L } from '../components/help';
 import { useRoute } from '../router';
 import { useLive } from '../store';
 
-type Tab = 'finanzas' | 'tiempos' | 'productos';
+type Tab = 'finanzas' | 'tiempos' | 'productos' | 'rentabilidad';
 
 export function ReportsScreen() {
   const route = useRoute();
@@ -25,13 +29,21 @@ export function ReportsScreen() {
   const scope = useScope('reportScope');
   const period = usePeriod('reportPeriod');
   return (
-    <Page title="Informes" back="/mas">
-      <Segmented label="Informe" value={tab} onChange={setTab} options={[['finanzas', 'Finanzas'], ['tiempos', 'Tiempos'], ['productos', 'Productos']]} />
+    <Page title="Informes" help="reports" back="/mas" actions={<a className="icon-btn" href="#/resumen" aria-label="Resumen mensual"><Icon name="image" /></a>}>
+      <Chips label="Informe" value={tab} onChange={setTab} options={[['finanzas', 'Finanzas'], ['tiempos', 'Tiempos'], ['productos', 'Productos'], ['rentabilidad', 'Rentabilidad']]} />
       <div className="stack-sm">
         <ScopeSelect {...scope} />
         <PeriodPicker p={period} />
       </div>
-      {tab === 'finanzas' ? <Finance ids={scope.inventoryIds} period={period} /> : tab === 'tiempos' ? <Times ids={scope.inventoryIds} period={period} /> : <Products ids={scope.inventoryIds} period={period} />}
+      {tab === 'finanzas' ? (
+        <Finance ids={scope.inventoryIds} period={period} />
+      ) : tab === 'tiempos' ? (
+        <Times ids={scope.inventoryIds} period={period} />
+      ) : tab === 'productos' ? (
+        <Products ids={scope.inventoryIds} period={period} />
+      ) : (
+        <Profitability ids={scope.inventoryIds} period={period} />
+      )}
     </Page>
   );
 }
@@ -63,7 +75,7 @@ function Finance({ ids, period }: { ids: string[] | null; period: ReturnType<typ
     <>
       {!cur.profitComplete ? (
         <Notice kind="warn" title="Ganancias incompletas">
-          {cur.cogsUnknownUnits} unidad(es) vendidas no tienen costo conocido. Las ganancias mostradas están sobrestimadas hasta completar esos costos en la ficha de cada unidad.
+          {cur.cogsUnknownUnits} unidad(es) vendidas no tienen costo conocido. Las ganancias mostradas están sobrestimadas hasta que completes esos costos en la ficha de cada unidad.
         </Notice>
       ) : null}
       <Card title={`Resultado · ${period.range.label}`}>
@@ -169,12 +181,13 @@ function Times({ ids, period }: { ids: string[] | null; period: ReturnType<typeo
   if (!data) return <Loading />;
   const known = data.aging.filter((a) => a.days !== null);
   const unknown = data.aging.filter((a) => a.days === null);
-  const stale = known.filter((a) => (a.days ?? 0) >= data.settings.staleDays);
+  const stale = known.filter((a) => a.stale);
   return (
     <>
       <Card title="Sin vender: más antiguos primero" flush>
         <div style={{ padding: '0 14px 8px' }} className="small muted">
-          {known.reduce((a, x) => a + x.qty, 0)} unidad(es) con fecha · {stale.reduce((a, x) => a + x.qty, 0)} con {data.settings.staleDays}+ días (estancadas)
+          {known.reduce((a, x) => a + x.qty, 0)} unidad(es) con fecha
+          {data.settings.staleEnabled ? ` · ${stale.reduce((a, x) => a + x.qty, 0)} estancada(s)` : ' · avisos de estancado apagados'}
           {unknown.length ? ` · ${unknown.reduce((a, x) => a + x.qty, 0)} con fecha desconocida (no se calculan días)` : ''}
         </div>
         <Paged
@@ -192,10 +205,15 @@ function Times({ ids, period }: { ids: string[] | null; period: ReturnType<typeo
                   <span className="item-sub" style={{ display: 'block' }}>
                     {a.code ? `${a.code} · ` : ''}
                     {data.invName.get(a.inventoryId)} · desde {formatDate(a.since)}
+                    {a.condition ? ` · ${a.condition}` : ''}
                   </span>
                 </span>
                 <span className="item-side">
-                  {a.days === null ? <Badge kind="warn">Fecha desconocida</Badge> : <Badge kind={a.days >= data.settings.staleDays ? 'bad' : a.days >= data.settings.staleDays / 2 ? 'warn' : 'ok'}>{a.days} días</Badge>}
+                  {a.days === null ? (
+                    <Badge kind="warn">Fecha desconocida</Badge>
+                  ) : (
+                    <Badge kind={a.stale ? 'bad' : a.days >= a.dormantDays / 2 ? 'warn' : 'ok'}>{a.days} días</Badge>
+                  )}
                 </span>
               </a>
             </li>
@@ -254,5 +272,78 @@ function Products({ ids, period }: { ids: string[] | null; period: ReturnType<ty
         )}
       />
     </Card>
+  );
+}
+
+function Profitability({ ids, period }: { ids: string[] | null; period: ReturnType<typeof usePeriod> }) {
+  const key = JSON.stringify([ids, period.range.current]);
+  const ppd = useLive((d) => getProfitPerDay(d, period.range.current, ids), [key]);
+  const sup = useLive((d) => getSupplierScores(d, ids), [JSON.stringify(ids)]);
+  return (
+    <>
+      <Card title={<h2><L k="profitPerDay">Ganancia por día por modelo</L> · {period.range.label}</h2>} flush>
+        {!ppd ? (
+          <Loading />
+        ) : ppd.filter((m) => m.units).length === 0 ? (
+          <Empty icon="chart" title="Sin ventas de equipos con costo y fecha conocidos" />
+        ) : (
+          <ul className="list" data-testid="profit-per-day">
+            {ppd
+              .filter((m) => m.units)
+              .map((m, i) => (
+                <li key={m.key} style={{ padding: '12px 14px' }}>
+                  <div className="row between">
+                    <span className="strong ellipsis">
+                      {i + 1}. {m.label}
+                    </span>
+                    <span className="money strong">{formatCOP(m.profitPerDay)}/día</span>
+                  </div>
+                  <div className="small muted">
+                    {m.units} vendido(s) · ganancia promedio {formatCOP(m.avgProfit)} · {String(m.avgDays).replace('.', ',')} días en promedio
+                    {m.dailyReturn !== null ? ` · rinde ${(m.dailyReturn * 30 * 100).toLocaleString('es-CO', { maximumFractionDigits: 1 })} % al mes` : ''}
+                    {m.excluded ? ` · ${m.excluded} sin costo o fecha (excluidas)` : ''}
+                  </div>
+                </li>
+              ))}
+          </ul>
+        )}
+        <p className="tiny muted" style={{ padding: '0 14px 12px' }}>
+          Un modelo con menos ganancia pero que se vende rápido puede dejarte más dinero al mes. <InfoTip k="dailyReturn" />
+        </p>
+      </Card>
+      <Card title={<h2><L k="supplierScore">Calificación de proveedores</L></h2>} flush>
+        {!sup ? (
+          <Loading />
+        ) : sup.length === 0 ? (
+          <Empty icon="truck" title="Aún no hay compras con proveedor" />
+        ) : (
+          <ul className="list wrap-sub" data-testid="supplier-scores">
+            {sup.map((s) => (
+              <li key={s.supplierId}>
+                <a className="item" href={`#/proveedores/${s.supplierId}`}>
+                  <span className="item-main">
+                    <span className="item-title" style={{ display: 'block' }}>
+                      {s.name}
+                    </span>
+                    <span className="item-sub" style={{ display: 'block' }}>
+                      {s.unitsBought} comprado(s) · {s.sold} venta(s)
+                      {s.avgMargin !== null ? ` · margen ${Math.round(s.avgMargin * 100)} %` : ''}
+                      {s.avgDays !== null ? ` · ${String(s.avgDays).replace('.', ',')} días` : ''}
+                      {s.returns ? ` · ${s.returns} devolución(es)` : ''}
+                      {s.claims ? ` · ${s.claims} reclamo(s)` : ''}
+                      {s.partIssues ? ` · ${s.partIssues} con piezas genéricas/aviso` : ''}
+                    </span>
+                  </span>
+                  <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
+                    {s.score === null ? <Badge>Sin ventas</Badge> : <Badge kind={s.score >= 70 ? 'ok' : s.score >= 45 ? 'warn' : 'bad'}>{s.score}/100</Badge>}
+                    {s.score !== null && !s.enoughData ? <span className="tiny muted">pocos datos</span> : null}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </>
   );
 }

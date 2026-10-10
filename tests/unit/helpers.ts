@@ -34,6 +34,7 @@ export async function availableUnits(db: AppDB, productId: string) {
 export async function expectIntegrity(db: AppDB) {
   const r = await verifyIntegrity(db);
   expect(r.issues).toEqual([]);
+  expect(r.warnings).toEqual([]);
   expect(r.ok).toBe(true);
 }
 

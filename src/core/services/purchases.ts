@@ -1,9 +1,10 @@
 import type { AppDB } from '../db';
-import type { AllocationMethod, ID, ISODate, Money, Purchase, PurchaseLine } from '../types';
+import type { AllocationMethod, ID, ISODate, Money, Purchase, PurchaseLine, Unit } from '../types';
 import { allocate, assertDate, assertMoney, assertQty, cleanStr, fail, newId, nowISO } from '../util';
 import { addMovement, logHistory, requireInventory, requireProduct } from './base';
 import { insertUnit, type UnitDetails } from './products';
 import { tx } from './stock';
+import { insertPurchaseDebt, type PurchaseFunding } from './debts';
 
 export interface PurchaseLineInput {
   productId: ID;
@@ -25,6 +26,8 @@ export interface PurchaseInput {
   extraCosts?: Money;
   allocation?: AllocationMethod;
   lines: PurchaseLineInput[];
+  /** Si la compra se pagó con deuda (tarjeta de crédito, crédito del proveedor...). Sin esto, se pagó con la caja. */
+  funding?: PurchaseFunding | null;
 }
 
 export interface PurchasePreviewLine {
@@ -66,7 +69,7 @@ export async function createPurchase(db: AppDB, input: PurchaseInput): Promise<P
   const date = assertDate(input.date, 'date', 'Fecha de compra');
   const extraCosts = assertMoney(input.extraCosts ?? 0, 'extraCosts', 'Gastos adicionales');
   const allocation: AllocationMethod = input.allocation === 'units' ? 'units' : 'value';
-  if (!input.lines?.length) fail('required', 'Agregue al menos un producto a la compra.', 'lines');
+  if (!input.lines?.length) fail('required', 'Agrega al menos un producto a la compra.', 'lines');
   input.lines.forEach((l, i) => {
     assertQty(l.quantity, `lines.${i}.quantity`);
     assertMoney(l.price, `lines.${i}.price`, 'Precio pagado');
@@ -103,12 +106,19 @@ export async function createPurchase(db: AppDB, input: PurchaseInput): Promise<P
       extraCosts,
       allocation,
       total: subtotal + extraCosts,
+      paymentSource: input.funding ? 'debt' : 'cash',
+      debtId: null,
       status: 'active',
       voidedAt: null,
       voidReason: '',
       createdAt: nowISO(),
     };
     await db.purchases.add(purchase);
+    if (input.funding) {
+      const debt = await insertPurchaseDebt(db, purchase, input.funding);
+      purchase.debtId = debt.id;
+      await db.purchases.update(purchase.id, { debtId: debt.id });
+    }
 
     for (let i = 0; i < input.lines.length; i++) {
       const l = input.lines[i];
@@ -222,11 +232,11 @@ export async function updatePurchaseInfo(
             if (sale && sale.status === 'active' && Date.parse(sale.date) < Date.parse(date))
               fail('incoherent_date', `La nueva fecha es posterior a la venta de ${u.code}.`, 'date');
           }
-          const uu: Record<string, unknown> = { acquiredAt: date };
+          const uu: Partial<Unit> = { acquiredAt: date };
           if (u.cycle === 1) uu.availableSince = date;
           await db.units.update(uid, uu);
           for (const s of sl) {
-            const lp: Record<string, unknown> = { acquiredAt: date };
+            const lp: Partial<typeof s> = { acquiredAt: date };
             if (s.cycleStart === u.acquiredAt) lp.cycleStart = date;
             await db.saleLines.update(s.id, lp);
           }
@@ -235,6 +245,13 @@ export async function updatePurchaseInfo(
       const mvs = await db.movements.where('refId').equals(id).toArray();
       for (const m of mvs) if (m.type === 'purchase') await db.movements.update(m.id, { at: date });
       upd.date = date;
+      if (p.debtId) {
+        const debt = await db.debts.get(p.debtId);
+        const first = (await db.debtPayments.where('debtId').equals(p.debtId).toArray()).map((x) => x.date).sort()[0];
+        if (first && Date.parse(first) < Date.parse(date))
+          fail('incoherent_date', 'La nueva fecha es posterior a un abono de la deuda de esta compra.', 'date');
+        if (debt) await db.debts.update(debt.id, { date, updatedAt: nowISO() });
+      }
     }
     await db.purchases.update(id, upd);
     await logHistory(db, {
@@ -254,11 +271,13 @@ export async function updatePurchaseInfo(
  */
 export async function voidPurchase(db: AppDB, id: ID, reason: string): Promise<void> {
   const r = cleanStr(reason, 300);
-  if (!r) fail('required', 'Indique el motivo de la anulación.', 'reason');
+  if (!r) fail('required', 'Escribe el motivo de la anulación.', 'reason');
   await tx(db, async () => {
     const p = await db.purchases.get(id);
     if (!p) fail('not_found', 'La compra no existe.');
     if (p.status === 'voided') return;
+    if (p.debtId && (await db.debtPayments.where('debtId').equals(p.debtId).count()) > 0)
+      fail('debt_has_payments', 'Esta compra se pagó con una deuda que ya tiene abonos. Anula primero esos abonos en Deudas.');
     const lines = await db.purchaseLines.where('purchaseId').equals(id).toArray();
     const purchaseMoves = (await db.movements.where('refId').equals(id).toArray()).filter((m) => m.type === 'purchase');
     const minSeq = Math.min(...purchaseMoves.map((m) => m.seq));
@@ -279,7 +298,7 @@ export async function voidPurchase(db: AppDB, id: ID, reason: string): Promise<v
           .filter((m) => m.seq > minSeq && m.qtyDelta < 0)
           .count();
         if (later > 0)
-          fail('later_outflows', `No se puede anular: "${prod.name}" tuvo salidas después de esta compra. Registre un ajuste en su lugar.`);
+          fail('later_outflows', `No se puede anular: "${prod.name}" tuvo salidas después de esta compra. Registra un ajuste en su lugar.`);
         if (prod.qty < l.quantity || prod.stockValue < l.totalCost)
           fail('not_in_stock', `No se puede anular: el stock de "${prod.name}" es menor que lo comprado.`);
       }
@@ -329,6 +348,7 @@ export async function voidPurchase(db: AppDB, id: ID, reason: string): Promise<v
       }
     }
     await db.purchases.update(id, { status: 'voided', voidedAt: now, voidReason: r });
+    if (p.debtId) await db.debts.update(p.debtId, { status: 'voided', updatedAt: now });
     await logHistory(db, {
       entityType: 'purchase',
       entityId: id,

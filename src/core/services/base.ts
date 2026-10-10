@@ -1,5 +1,5 @@
 import type { AppDB } from '../db';
-import type { HistoryEntry, ID, Movement, Product, Settings } from '../types';
+import type { HistoryEntry, ID, Movement, PricingSettings, Product, Settings } from '../types';
 import { fail, newId, nowISO } from '../util';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -7,15 +7,45 @@ export const DEFAULT_SETTINGS: Settings = {
   businessName: '',
   defaultMode: 'simple',
   prefixes: { iphone: 'IPH', phone: 'TEL', audio: 'AUD', accessory: 'ACC', other: 'OTR' },
+  staleEnabled: true,
   staleDays: 60,
+  staleDaysNew: null,
+  staleDaysUsed: null,
   warrantyAlertDays: 15,
   backupReminderDays: 7,
-  conditions: ['Nuevo', 'Usado', 'Reacondicionado'],
+  conditions: ['Nuevo', 'Usado', 'Restaurado'],
+  pricing: {
+    minMarginType: 'amount',
+    minMarginValue: 100_000,
+    targetMarginType: 'amount',
+    targetMarginValue: 250_000,
+    expectedCosts: 0,
+    batteryThreshold: null,
+    batteryDiscount: 0,
+    genericPartDiscount: 0,
+    marketStaleDays: 30,
+    recentSalesDays: 90,
+  },
+  paymentFees: { Efectivo: 0, Transferencia: 0, Nequi: 0, Daviplata: 0, Tarjeta: 0, Otro: 0 },
+  showGettingStarted: true,
 };
 
+/** Combina lo guardado con los valores por defecto (los campos nuevos de versiones posteriores quedan con su valor por defecto). */
+export function mergeSettings(s: Partial<Settings> | undefined | null): Settings {
+  if (!s) return { ...DEFAULT_SETTINGS, pricing: { ...DEFAULT_SETTINGS.pricing }, paymentFees: { ...DEFAULT_SETTINGS.paymentFees } };
+  const pricing: PricingSettings = { ...DEFAULT_SETTINGS.pricing, ...(s.pricing ?? {}) };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...s,
+    key: 'app',
+    prefixes: { ...DEFAULT_SETTINGS.prefixes, ...(s.prefixes ?? {}) },
+    pricing,
+    paymentFees: { ...DEFAULT_SETTINGS.paymentFees, ...(s.paymentFees ?? {}) },
+  };
+}
+
 export async function getSettings(db: AppDB): Promise<Settings> {
-  const s = await db.settings.get('app');
-  return s ? { ...DEFAULT_SETTINGS, ...s, prefixes: { ...DEFAULT_SETTINGS.prefixes, ...s.prefixes } } : DEFAULT_SETTINGS;
+  return mergeSettings(await db.settings.get('app'));
 }
 
 export async function logHistory(
@@ -70,7 +100,7 @@ export async function requireInventory(db: AppDB, id: ID, opts: { allowArchived?
   const inv = await db.inventories.get(id);
   if (!inv) fail('not_found', 'El inventario no existe.', 'inventoryId');
   if (inv.archived && !opts.allowArchived)
-    fail('archived', `El inventario "${inv.name}" está archivado. Desarchívelo para registrar operaciones.`, 'inventoryId');
+    fail('archived', `El inventario "${inv.name}" está archivado. Desarchívalo para registrar operaciones.`, 'inventoryId');
   return inv;
 }
 

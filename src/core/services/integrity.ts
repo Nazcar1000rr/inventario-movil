@@ -4,6 +4,11 @@ import type { ID } from '../types';
 export interface IntegrityReport {
   ok: boolean;
   issues: string[];
+  /**
+   * Diferencias de valor que no impiden usar los datos (p. ej. el costo de una unidad no coincide con la suma
+   * de sus movimientos). Las pruebas exigen que esté vacío; restaurar un respaldo no se bloquea por esto.
+   */
+  warnings: string[];
   counts: Record<string, number>;
 }
 
@@ -18,7 +23,8 @@ export interface IntegrityReport {
  */
 export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
   const issues: string[] = [];
-  const [inventories, products, units, purchases, pLines, sales, sLines, payments, returns, expenses, movements, warranties, claims, repairs, photos, views, suppliers, customers] =
+  const warnings: string[] = [];
+  const [inventories, products, units, purchases, pLines, sales, sLines, payments, returns, expenses, movements, warranties, claims, repairs, photos, views, suppliers, customers, capital, debts, debtPayments, goals] =
     await Promise.all([
       db.inventories.toArray(),
       db.products.toArray(),
@@ -38,6 +44,10 @@ export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
       db.consolidatedViews.toArray(),
       db.suppliers.toArray(),
       db.customers.toArray(),
+      db.capital.toArray(),
+      db.debts.toArray(),
+      db.debtPayments.toArray(),
+      db.goals.toArray(),
     ]);
   const invIds = new Set(inventories.map((i) => i.id));
   const prodById = new Map(products.map((p) => [p.id, p]));
@@ -58,12 +68,17 @@ export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
   // Movimientos agregados
   const agg = new Map<ID, { q: number; c: number; u: number }>();
   const unitAgg = new Map<ID, number>();
+  const unitCostAgg = new Map<ID, { c: number; u: number }>();
   for (const m of movements) {
     ref(invIds.has(m.inventoryId), `Movimiento ${m.id}: inventario inexistente`);
     ref(prodById.has(m.productId), `Movimiento ${m.id}: producto inexistente`);
     if (m.unitId) {
       ref(unitById.has(m.unitId), `Movimiento ${m.id}: unidad inexistente`);
       unitAgg.set(m.unitId, (unitAgg.get(m.unitId) ?? 0) + m.qtyDelta);
+      const uc = unitCostAgg.get(m.unitId) ?? { c: 0, u: 0 };
+      uc.c += m.costDelta;
+      uc.u += m.unknownDelta;
+      unitCostAgg.set(m.unitId, uc);
     } else {
       const a = agg.get(m.productId) ?? { q: 0, c: 0, u: 0 };
       a.q += m.qtyDelta;
@@ -81,6 +96,11 @@ export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
     ref(p.qty >= 0 && p.stockValue >= 0 && p.unknownCostQty >= 0 && p.unknownCostQty <= p.qty, `Producto ${p.name}: existencias negativas o incoherentes`);
   }
 
+  // Costos capitalizados activos por unidad (reparaciones, costos sumados)
+  const capByUnit = new Map<ID, number>();
+  for (const e of expenses)
+    if (e.status === 'active' && e.treatment === 'capitalized' && e.unitId) capByUnit.set(e.unitId, (capByUnit.get(e.unitId) ?? 0) + e.amount);
+
   for (const u of units) {
     const p = prodById.get(u.productId);
     ref(!!p, `Unidad ${u.code}: producto inexistente`);
@@ -97,6 +117,14 @@ export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
     } else {
       ref(u.saleId === null, `Unidad ${u.code}: no vendida pero con venta asociada`);
     }
+    // Valor según movimientos = costo de la unidad en existencia (o 0 si ya salió)
+    const uc = unitCostAgg.get(u.id) ?? { c: 0, u: 0 };
+    const cap = capByUnit.get(u.id) ?? 0;
+    const expected = inStock ? (u.baseCost ?? 0) + u.extraCost : 0;
+    if (uc.c + cap !== expected) warnings.push(`Unidad ${u.code}: valor según movimientos ${uc.c + cap} ≠ costo ${expected}`);
+    if (uc.u !== (inStock && u.baseCost === null ? 1 : 0)) warnings.push(`Unidad ${u.code}: costo desconocido incoherente con sus movimientos`);
+    if (cap !== u.extraCost) warnings.push(`Unidad ${u.code}: costos adicionales ${u.extraCost} ≠ gastos capitalizados ${cap}`);
+    if (!Array.isArray(u.partsHistory)) issues.push(`Unidad ${u.code}: historial de piezas inválido`);
     if (u.supplierId) ref(supplierIds.has(u.supplierId), `Unidad ${u.code}: proveedor inexistente`);
     if (u.purchaseId) ref(purchaseById.has(u.purchaseId), `Unidad ${u.code}: compra inexistente`);
   }
@@ -152,9 +180,64 @@ export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
   for (const ph of photos) ref(unitById.has(ph.unitId), `Foto ${ph.id}: unidad inexistente`);
   for (const v of views) for (const id of v.inventoryIds) ref(invIds.has(id), `Vista ${v.name}: inventario inexistente`);
 
+  // Capital (aportes, retiros, préstamos al dueño)
+  const ownerLoans = new Map<string, number>();
+  for (const c of capital) {
+    if (c.inventoryId) ref(invIds.has(c.inventoryId), `Capital ${c.id}: inventario inexistente`);
+    ref(Number.isInteger(c.amount), `Capital ${c.id}: valor inválido`);
+    if (c.kind === 'cash_adjustment') ref(c.amount !== 0, `Capital ${c.id}: ajuste de caja en cero`);
+    else ref(c.amount > 0, `Capital ${c.id}: el valor debe ser positivo`);
+    if (c.status !== 'active') continue;
+    const k = c.inventoryId ?? '';
+    if (c.kind === 'owner_loan') ownerLoans.set(k, (ownerLoans.get(k) ?? 0) + c.amount);
+    if (c.kind === 'owner_loan_repayment') ownerLoans.set(k, (ownerLoans.get(k) ?? 0) - c.amount);
+  }
+  for (const [k, v] of ownerLoans) ref(v >= 0, `Préstamos al dueño${k ? ` (${k})` : ''}: devuelto más de lo prestado`);
+
+  // Deudas
+  const debtById = new Map(debts.map((d) => [d.id, d]));
+  const paidByDebt = new Map<ID, number>();
+  for (const p of debtPayments) {
+    const d = debtById.get(p.debtId);
+    ref(!!d, `Abono ${p.id}: deuda inexistente`);
+    ref(p.principal >= 0 && p.interest >= 0, `Abono ${p.id}: valores negativos`);
+    if (d) ref(d.status !== 'voided', `Abono ${p.id}: deuda anulada con abonos`);
+    if (p.interest > 0) {
+      const e = p.expenseId ? expenses.find((x) => x.id === p.expenseId) : undefined;
+      ref(!!e && e.status === 'active' && e.amount === p.interest, `Abono ${p.id}: gasto de intereses incoherente`);
+    }
+    paidByDebt.set(p.debtId, (paidByDebt.get(p.debtId) ?? 0) + p.principal);
+  }
+  for (const d of debts) {
+    if (d.inventoryId) ref(invIds.has(d.inventoryId), `Deuda ${d.id}: inventario inexistente`);
+    ref(d.principal > 0, `Deuda ${d.id}: valor inválido`);
+    const paid = paidByDebt.get(d.id) ?? 0;
+    ref(paid <= d.principal, `Deuda ${d.creditor}: abonos mayores que la deuda`);
+    if (d.status === 'paid') ref(paid === d.principal, `Deuda ${d.creditor}: marcada como pagada con saldo pendiente`);
+    if (d.status === 'open') ref(paid < d.principal, `Deuda ${d.creditor}: saldada pero marcada como pendiente`);
+    if (d.purchaseId) {
+      const p = purchaseById.get(d.purchaseId);
+      ref(!!p, `Deuda ${d.creditor}: compra inexistente`);
+      if (p) {
+        ref(p.debtId === d.id, `Deuda ${d.creditor}: la compra no apunta a esta deuda`);
+        ref(d.principal <= p.total, `Deuda ${d.creditor}: mayor que el total de su compra`);
+        if (p.status === 'voided') ref(d.status === 'voided', `Deuda ${d.creditor}: su compra está anulada pero la deuda no`);
+      }
+    }
+  }
+  for (const p of purchases) {
+    if (p.paymentSource === 'debt') {
+      const d = p.debtId ? debtById.get(p.debtId) : undefined;
+      ref(!!d && d.purchaseId === p.id, `Compra ${p.id}: pagada con deuda sin deuda asociada`);
+    } else ref(!p.debtId, `Compra ${p.id}: pagada con caja pero con deuda asociada`);
+  }
+  for (const e of expenses) if (e.debtId) ref(debtById.has(e.debtId), `Gasto ${e.id}: deuda inexistente`);
+  for (const g of goals) if (g.inventoryId) ref(invIds.has(g.inventoryId), `Meta ${g.name}: inventario inexistente`);
+
   return {
     ok: issues.length === 0,
     issues,
+    warnings,
     counts: {
       inventories: inventories.length,
       products: products.length,

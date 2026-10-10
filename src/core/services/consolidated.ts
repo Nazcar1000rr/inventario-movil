@@ -12,9 +12,9 @@ import { summarizeUnits, tx } from './stock';
 
 export async function createView(db: AppDB, input: { name: string; inventoryIds: ID[] }): Promise<ConsolidatedView> {
   const name = cleanStr(input.name, 60);
-  if (!name) fail('required', 'Ingrese un nombre para la vista.', 'name');
+  if (!name) fail('required', 'Escribe un nombre para la vista.', 'name');
   const ids = [...new Set(input.inventoryIds)];
-  if (ids.length < 2) fail('too_few', 'Seleccione al menos dos inventarios.', 'inventoryIds');
+  if (ids.length < 2) fail('too_few', 'Elige al menos dos inventarios.', 'inventoryIds');
   return tx(db, async () => {
     for (const id of ids) if (!(await db.inventories.get(id))) fail('not_found', 'Uno de los inventarios no existe.');
     const now = nowISO();
@@ -32,12 +32,12 @@ export async function updateView(db: AppDB, id: ID, patch: { name?: string; inve
     const next = { ...v, updatedAt: nowISO() };
     if (patch.name !== undefined) {
       const n = cleanStr(patch.name, 60);
-      if (!n) fail('required', 'Ingrese un nombre para la vista.', 'name');
+      if (!n) fail('required', 'Escribe un nombre para la vista.', 'name');
       next.name = n;
     }
     if (patch.inventoryIds !== undefined) {
       const ids = [...new Set(patch.inventoryIds)];
-      if (ids.length < 2) fail('too_few', 'Seleccione al menos dos inventarios.', 'inventoryIds');
+      if (ids.length < 2) fail('too_few', 'Elige al menos dos inventarios.', 'inventoryIds');
       next.inventoryIds = ids;
     }
     if (patch.archived !== undefined) next.archived = patch.archived;

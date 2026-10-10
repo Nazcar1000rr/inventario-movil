@@ -52,6 +52,27 @@ test('todas las pantallas cargan sin errores (con datos de ejemplo)', async ({ p
   await expect(page.getByRole('heading', { name: 'Todo' })).toBeVisible();
   const viewId = page.url().split('/vistas/')[1];
 
+  // v2: capital, deuda y precio de mercado
+  await page.goto('/#/capital');
+  await page.getByRole('button', { name: 'Aporte', exact: true }).click();
+  await page.locator('#cm-amount').fill('5000000');
+  await page.getByTestId('save-capital').click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.goto('/#/deudas');
+  await page.getByRole('button', { name: 'Nueva deuda' }).click();
+  await page.locator('#db-cred').fill('Primo');
+  await page.locator('#db-amount').fill('1000000');
+  await page.getByTestId('save-debt').click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const debtId = (await page.locator('a[href^="#/deudas/"]').first().getAttribute('href'))!.split('/deudas/')[1];
+  await page.goto('/#/precios');
+  await page.getByTestId('add-market-price').click();
+  await page.locator('#mp-model').fill('iPhone 13 Pro');
+  await page.locator('#mp-cap').fill('128 GB');
+  await page.locator('#mp-price').fill('2900000');
+  await page.getByTestId('save-market-price').click();
+  await expect(page.getByTestId('market-row')).toBeVisible();
+
   // Identificadores para rutas de detalle
   await page.goto(`/#/inventarios/${inv}`);
   await page.getByText('iPhone 13 Pro 128 GB').click();
@@ -100,13 +121,35 @@ test('todas las pantallas cargan sin errores (con datos de ejemplo)', async ({ p
     '/ajustes',
     '/mas',
     '/buscar?q=IPH',
+    '/capital',
+    '/deudas',
+    `/deudas/${debtId}`,
+    '/precios',
+    '/calculadora',
+    '/resumen',
+    '/informes?tab=rentabilidad',
+    '/ayuda',
+    '/ayuda/capital',
+    '/ayuda/manual',
+    '/ayuda/novedades',
   ];
+  let helpOpened = 0;
   for (const r of routes) {
     await page.goto(`/#${r}`);
     await page.waitForTimeout(200);
     await expect(page.getByText('Ocurrió un error al mostrar esta pantalla'), r).toHaveCount(0);
     await expect(page.getByText('Pantalla no encontrada'), r).toHaveCount(0);
     await noHorizontalOverflow(page);
+    // Ayuda "?" de la pantalla (si tiene)
+    const help = page.getByTestId('help-btn');
+    if (await help.count()) {
+      await help.click();
+      await expect(page.getByRole('dialog', { name: /^Ayuda · / }), r).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      helpOpened++;
+    }
   }
+  expect(helpOpened).toBeGreaterThanOrEqual(25);
   expect(errors).toEqual([]);
 });

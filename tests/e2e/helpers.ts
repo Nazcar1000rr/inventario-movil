@@ -53,7 +53,7 @@ export async function purchase(
   await page.locator('#pu-p-0').fill(String(unitPrice));
   if (opts.extra) await page.locator('#pu-extra').fill(String(opts.extra));
   if (opts.imeis) {
-    await page.getByText('IMEI, serial y estado por unidad (opcional)').click();
+    await page.getByText(/IMEI, batería y piezas por equipo/).first().click();
     for (let i = 0; i < opts.imeis.length; i++) await page.locator(`#ud-imei-${i}`).fill(opts.imeis[i]);
   }
   await page.getByRole('button', { name: 'Revisar y registrar compra' }).click();
@@ -96,4 +96,11 @@ export async function confirmTyped(page: Page, text: string) {
   const dlg = page.getByRole('dialog');
   await dlg.getByRole('textbox').fill(text);
   await dlg.getByTestId('ask-confirm').click();
+}
+
+/** Captura para la documentación: oculta avisos flotantes y la barra inferior fija (que en capturas de página completa queda en medio). */
+export async function docShot(page: Page, name: string, fullPage = true) {
+  const style = await page.addStyleTag({ content: '.toasts, .bottom-nav, .practice-banner { display: none !important; }' });
+  await page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage });
+  await style.evaluate((el) => el.remove());
 }

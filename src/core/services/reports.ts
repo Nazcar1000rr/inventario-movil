@@ -1,5 +1,6 @@
 import type { AppDB } from '../db';
-import type { ID, ISODate, Money, Movement, Product, ProductKind, Sale, SaleLine } from '../types';
+import type { ID, ISODate, Money, Movement, Product, ProductKind, Sale, SaleLine, Settings } from '../types';
+import { conditionGroup } from '../catalog';
 import { daysBetween, startOfDay } from '../util';
 import { getSettings } from './base';
 import { groupKey } from './consolidated';
@@ -357,12 +358,47 @@ export interface AgingItem {
   days: number | null;
   cost: Money | null;
   status: string;
+  /** Estado del equipo (Nuevo / Usado / Restaurado); vacío en productos por cantidad. */
+  condition: string;
+  /** Días a partir de los cuales se considera "dinero dormido" (según el estado del equipo). */
+  dormantDays: number;
+  /** Umbral de aviso de estancado (null = avisos desactivados). */
+  staleDays: number | null;
+  /** true si supera el umbral de aviso de estancado. */
+  stale: boolean;
+  /** true si supera el umbral de dinero dormido (aunque los avisos estén desactivados). */
+  dormant: boolean;
+}
+
+/**
+ * Días para considerar un producto estancado según su estado:
+ * - nuevos → umbral de nuevos (o el general); usados/restaurados → umbral de usados (o el general).
+ * Con `forAlerts`, devuelve null si los avisos de estancado están desactivados.
+ */
+export function staleThreshold(settings: Pick<Settings, 'staleEnabled' | 'staleDays' | 'staleDaysNew' | 'staleDaysUsed'>, condition: string | null, forAlerts = true): number | null {
+  if (forAlerts && settings.staleEnabled === false) return null;
+  const g = conditionGroup(condition);
+  if (g === 'new') return settings.staleDaysNew ?? settings.staleDays;
+  if (g === 'used') return settings.staleDaysUsed ?? settings.staleDays;
+  return settings.staleDays;
 }
 
 /** Existencias sin vender y su antigüedad. Las de fecha desconocida se devuelven con days = null. */
 export async function getUnsoldAging(db: AppDB, inventoryIds: ID[] | null, now = new Date()): Promise<AgingItem[]> {
   const invSet = inventoryIds ? new Set(inventoryIds) : null;
   const inInv = (id: ID) => (invSet ? invSet.has(id) : true);
+  const settings = await getSettings(db);
+  const flags = (days: number | null, condition: string) => {
+    const staleDays = staleThreshold(settings, condition, true);
+    const dormantDays = staleThreshold(settings, condition, false)!;
+    return {
+      condition,
+      staleDays,
+      dormantDays,
+      stale: days !== null && staleDays !== null && days >= staleDays,
+      dormant: days !== null && days >= dormantDays,
+    };
+  };
   const products = (await db.products.toArray()).filter((p) => inInv(p.inventoryId));
   const pById = new Map(products.map((p) => [p.id, p]));
   const items: AgingItem[] = [];
@@ -372,7 +408,9 @@ export async function getUnsoldAging(db: AppDB, inventoryIds: ID[] | null, now =
   for (const u of units) {
     const p = pById.get(u.productId);
     if (!p) continue;
+    const days = u.availableSince ? daysBetween(u.availableSince, now) : null;
     items.push({
+      ...flags(days, u.condition),
       type: 'unit',
       inventoryId: u.inventoryId,
       productId: p.id,
@@ -382,7 +420,7 @@ export async function getUnsoldAging(db: AppDB, inventoryIds: ID[] | null, now =
       code: u.code,
       qty: 1,
       since: u.availableSince,
-      days: u.availableSince ? daysBetween(u.availableSince, now) : null,
+      days,
       cost: unitCost(u),
       status: u.status,
     });
@@ -397,7 +435,9 @@ export async function getUnsoldAging(db: AppDB, inventoryIds: ID[] | null, now =
       const avg = p.qty - p.unknownCostQty > 0 ? Math.round(p.stockValue / (p.qty - p.unknownCostQty)) : null;
       for (const L of layers) {
         if (L.qty <= 0) continue;
+        const days = L.date ? daysBetween(L.date, now) : null;
         items.push({
+          ...flags(days, ''),
           type: 'lot',
           inventoryId: p.inventoryId,
           productId: p.id,
@@ -407,7 +447,7 @@ export async function getUnsoldAging(db: AppDB, inventoryIds: ID[] | null, now =
           code: '',
           qty: L.qty,
           since: L.date,
-          days: L.date ? daysBetween(L.date, now) : null,
+          days,
           cost: avg === null ? null : avg * L.qty,
           status: 'available',
         });
@@ -622,7 +662,7 @@ export async function getAlerts(db: AppDB, inventoryIds: ID[] | null, now = new 
   }
 
   const aging = await getUnsoldAging(db, inventoryIds, now);
-  const stale = aging.filter((a) => a.days !== null && a.days >= settings.staleDays && activeInv.has(a.inventoryId));
+  const stale = aging.filter((a) => a.stale && activeInv.has(a.inventoryId));
 
   const warrantiesExpiring: Alerts['warrantiesExpiring'] = [];
   for (const w of warranties) {

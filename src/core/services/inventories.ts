@@ -17,7 +17,7 @@ export async function createInventory(
   input: { name: string; mode?: InventoryMode; notes?: string },
 ): Promise<Inventory> {
   const name = cleanStr(input.name, 60);
-  if (!name) fail('required', 'Ingrese un nombre para el inventario.', 'name');
+  if (!name) fail('required', 'Escribe un nombre para el inventario.', 'name');
   return db.transaction('rw', db.inventories, db.settings, db.history, async () => {
     await assertUniqueName(db, name);
     const settings = await getSettings(db);
@@ -48,7 +48,7 @@ export async function createInventory(
 
 export async function renameInventory(db: AppDB, id: ID, newName: string): Promise<void> {
   const name = cleanStr(newName, 60);
-  if (!name) fail('required', 'Ingrese un nombre para el inventario.', 'name');
+  if (!name) fail('required', 'Escribe un nombre para el inventario.', 'name');
   await db.transaction('rw', db.inventories, db.history, async () => {
     const inv = await requireInventory(db, id, { allowArchived: true });
     if (inv.name === name) return;
@@ -108,18 +108,22 @@ export interface InventoryDeletionImpact {
   sales: number;
   expenses: number;
   warranties: number;
+  capital: number;
+  debts: number;
 }
 
 export async function getDeletionImpact(db: AppDB, id: ID): Promise<InventoryDeletionImpact> {
-  const [products, units, purchases, sales, expenses, warranties] = await Promise.all([
+  const [products, units, purchases, sales, expenses, warranties, capital, debts] = await Promise.all([
     db.products.where('inventoryId').equals(id).count(),
     db.units.where('inventoryId').equals(id).count(),
     db.purchases.where('inventoryId').equals(id).count(),
     db.sales.where('inventoryId').equals(id).count(),
     db.expenses.where('inventoryId').equals(id).count(),
     db.warranties.filter((w) => w.inventoryId === id).count(),
+    db.capital.where('inventoryId').equals(id).count(),
+    db.debts.where('inventoryId').equals(id).count(),
   ]);
-  return { products, units, purchases, sales, expenses, warranties };
+  return { products, units, purchases, sales, expenses, warranties, capital, debts };
 }
 
 /**
@@ -152,6 +156,11 @@ export async function deleteInventoryPermanently(db: AppDB, id: ID, confirmName:
     await db.products.where('inventoryId').equals(id).delete();
     await db.movements.where('inventoryId').equals(id).delete();
     await db.history.where('inventoryId').equals(id).delete();
+    const debtIds = await db.debts.where('inventoryId').equals(id).primaryKeys();
+    await db.debtPayments.where('debtId').anyOf(debtIds).delete();
+    await db.debts.bulkDelete(debtIds);
+    await db.capital.where('inventoryId').equals(id).delete();
+    await db.goals.where('inventoryId').equals(id).delete();
     const views = await db.consolidatedViews.toArray();
     for (const v of views) {
       if (v.inventoryIds.includes(id))

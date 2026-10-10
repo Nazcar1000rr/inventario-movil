@@ -1,84 +1,86 @@
 # Pruebas: lo ejecutado y lo pendiente
 
-Fecha de ejecución: 9 de octubre de 2026.
+Fecha de ejecución: 10 de octubre de 2026 (versión 2.0.0).
 
 Entorno:
 - Linux con Node 22.22.
 - Vitest 5.0.3 + fake-indexeddb 6.2.5: implementación de IndexedDB conforme al estándar, sobre la que corre el mismo código Dexie de la app.
 - Playwright 1.56 con Chromium 141 (compilación 1194), contra la **compilación de producción** (`npm run build` + `vite preview`).
 
-**Resultado: 40/40 pruebas de lógica y 13/13 pruebas de extremo a extremo aprobadas.** Además, `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+**Resultado: 64/64 pruebas de lógica (5 corridas seguidas sin fallos) y 17/17 pruebas de extremo a extremo aprobadas.** `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
 
-## Errores reales encontrados y corregidos durante las pruebas
+## Versión 2: qué se probó
 
-1. **Recarga inesperada en la primera visita.** Al activarse el service worker por primera vez, la app se recargaba sola e interrumpía al usuario. Ahora solo recarga cuando una versión nueva reemplaza a otra.
-2. **Diálogos que enviaban el formulario de fondo.** Al guardar un comprador o un producto desde un diálogo, el envío se propagaba al formulario de venta o compra que estaba detrás y abría su confirmación. Se corrigió en el componente de diálogo.
-3. **Consultas repetidas sin parar en el panel e informes.** El rango del periodo cambiaba en cada pintado de pantalla. Ahora los límites son estables. Se verificó 0 operaciones de IndexedDB en 3 segundos de reposo en Inicio, Finanzas y Tiempos.
-4. **Etiquetas que se partían palabra por palabra en pantallas de 320 px.** Se cambió el diseño de las filas de datos.
+| Tema | Cómo se verificó | Resultado |
+|---|---|---|
+| Migración real v1 → v2 (base de datos) | Se crean datos con la app, se convierten **exactamente** a la forma de la v1 (sin campos nuevos, "Reacondicionado", movimientos sin ajustar de un costo completado después de vender y de una baja con reparación), se guardan en una base Dexie **versión 1** y se abre con la app v2: nada se pierde, los campos nuevos quedan con su valor por defecto, los movimientos quedan iguales a los que produce la v2, integridad sin problemas ni advertencias y crecimiento explicado al peso | ✅ |
+| Migración v1 → v2 en el navegador | E2E: se crea una base IndexedDB con el esquema y los datos de la v1 en Chromium, se abre la app compilada: inventario, unidad ("Restaurado"), compra ("La caja") y configuración convertidos; se muestran las novedades una sola vez | ✅ (Chromium) |
+| Respaldo de la v1 importado en la v2 | Archivo v1 (23 tablas, suma SHA-256 válida) → se convierte, se importa y queda igual que la base actualizada. Un respaldo v1 incompleto se rechaza | ✅ |
+| Respaldo v2 | Con capital, deudas, precios, metas y piezas, cifrado: se restaura idéntico en otra base | ✅ |
+| Capital (caso calculado a mano) | 17 operaciones (aporte, stock inicial, compra de contado, compra con tarjeta, reparación, ventas con abono y con comisión, gasto general, préstamo a ti y devolución, retiro, ajuste de caja, préstamo de un tercero, abono con intereses, devolución, mercancía encontrada, venta): caja 9 847 600, inventario 3 400 000, por cobrar 500 000, deudas 2 000 000, valor 11 947 600, capital aportado 11 100 000, crecimiento 847 600 = ganancia neta 837 600 − ajuste 10 000 + mercancía encontrada 20 000 | ✅ |
+| Capital por inventario | El gasto general no cuenta al filtrar un inventario (caja +50 000, crecimiento 897 600) y la identidad del crecimiento se cumple igual | ✅ |
+| Serie mensual | Diciembre (solo mercancía aportada: crecimiento 0), enero (valor 11 687 600, crecimiento 387 600 = ganancia de enero), suma de crecimientos mensuales = crecimiento total, último punto = hoy | ✅ |
+| Métricas | Rentabilidad de febrero 450 000 ÷ 11 687 600, rotación 1 180 000 ÷ 3 980 000, dinero dormido por antigüedad | ✅ |
+| Deudas | Abonos, intereses como gasto financiero, estado "Pagada", sobrepago rechazado, anular abono reabre, anular deuda con abonos o de compra bloqueado, compra con deuda parcial (solo sale de caja lo de contado) | ✅ |
+| Préstamos a ti | Devolver más de lo prestado se rechaza; anular un préstamo ya devuelto en parte se bloquea; un retiro no cambia el crecimiento | ✅ |
+| Comisiones | 3 % de 80 000 = 2 400 como gasto; 0 % en efectivo; valor manual y 0 respetados | ✅ |
+| Precios | Historial y "desactualizado" a los 30 días, tu precio real, sugerido, mínimo en pesos y %, máximo de compra con descuentos por batería y pieza, sin desvíos por coma flotante (1 500 000 × 1,1 = 1 650 000) | ✅ |
+| Ganancia por día y proveedores | Casos calculados: 12 500/día y 20 000/día; puntajes 93 y 38 con sus componentes | ✅ |
+| Historial de piezas | Al ingresar, editar, quitar; "otra" exige descripción; reparación pagada agrega pieza enlazada y suma costo; anotar piezas no cambia el costo | ✅ |
+| Estancado opcional y por estado | Nuevos 30 días / usados con el general / usados 90; apagado = sin avisos pero con dinero dormido | ✅ |
+| Tono cercano | Prueba que recorre todo el código y falla si aparece una forma de "usted" | ✅ |
+| PDF del resumen | Estructura del PDF (tabla xref, imagen completa, tamaño A4) | ✅ |
+| E2E v2 (modo sencillo) | Aporte → compra con tarjeta, estado "Usado" y pieza genérica con aviso → ficha con etiquetas → precio de mercado → venta con "Usar sugerido", aviso de venta bajo el costo y comisión 60 000 → abono con intereses → Capital: caja 11 420 000, valor 10 420 000, crecimiento 420 000 → calculadora 1 750 000 → resumen mensual descargado como PNG y PDF válidos | ✅ (Chromium) |
+| E2E ayuda | Primeros pasos (0 → 1 → 2 de 7), "?" de Inicio, "Llévame ahí", buscador sin tildes, ⓘ con fórmula, manual completo | ✅ (Chromium) |
+| E2E modo práctica | Base aparte con datos de ejemplo; al salir, los datos reales siguen y los de práctica no aparecen | ✅ (Chromium) |
+| Todas las pantallas | 46 rutas sin errores de consola ni desbordes; el "?" abre su ayuda en 25 o más de ellas | ✅ (Chromium) |
+| Diseño adaptable | 18 pantallas × 8 tamaños (320 a 1280 px) sin desborde horizontal | ✅ (Chromium) |
 
-## Correspondencia con las pruebas obligatorias
+## Errores reales encontrados y corregidos durante las pruebas (v2)
 
-| # | Prueba exigida | Cómo se verificó | Resultado |
-|---|---|---|---|
-| 1 | Crear inventario en modo sencillo | `operations.test.ts`, flujo E2E | ✅ |
-| 2 | Crear inventario en modo profesional | `operations.test.ts`, E2E profesional | ✅ |
-| 3 | Cambiar de modalidad sin pérdida de datos | Instantánea de **todas** las tablas antes y después de 3 cambios: idénticas. En E2E se cambia sencillo → profesional y los datos de inspección y costo siguen ahí | ✅ |
-| 4 | Compra y stock | Unidades con costo exacto (1 530 000 c/u con gastos repartidos) y producto por cantidad (valor 204 000) | ✅ |
-| 5 | Venta y disminución de stock | Unidad vendida (la más antigua) y cantidad 10 → 7 | ✅ |
-| 6 | Evitar venta superior al stock | Por cantidad, por unidad, venta mixta y la misma línea repetida. La base queda idéntica tras el error. En E2E aparece el mensaje "Stock insuficiente" | ✅ |
-| 7 | Evitar duplicar venta (doble pulsación o reintento) | Dos llamadas simultáneas y un reintento con la misma `opId` = 1 venta. Dos ventas distintas de la misma unidad en paralelo: solo una se completa. En E2E, triple clic en Confirmar = 1 venta | ✅ |
-| 8 | Costos, ingresos y ganancias con caso conocido | Ventas 2 105 000, descuento 5 000, costo 1 591 200, ganancia bruta 508 800, gastos 80 000, ganancia neta 428 800 | ✅ |
-| 9 | Ventas cobradas frente a pendientes | Pendiente → parcial → pagada. Se rechaza el sobrepago y un pago reintentado no se duplica | ✅ |
-| 10 | Gastos sin descontar dos veces | Una reparación capitalizada no aparece como gasto operativo y entra una sola vez en el costo al vender | ✅ |
-| 11 | Devolución conservando la venta original | La venta sigue activa, la línea marca lo devuelto, la unidad queda en revisión en el ciclo 2 con su fecha original, la garantía se anula y hay historial. Al revender se conserva el ciclo anterior | ✅ |
-| 12 | Días en inventario con fechas conocidas | 30 días en inventario; 15 y 25 días hasta vender; promedio 20 | ✅ |
-| 13 | Fecha desconocida sin inventarla | `acquiredAt = null`, días = null, excluida de los promedios (contada como "sin fecha"). Ganancia marcada incompleta hasta completar el costo | ✅ |
-| 14 | Dos inventarios y vista consolidada sin duplicar | A = 3 + B = 2 → la vista muestra 5. La vista no crea registros | ✅ |
-| 15 | Vender desde el origen y ver la vista | Se vende desde A → A = 2, vista = 4, B = 2. Desde la vista pide elegir el origen. Las finanzas de la vista son A + B | ✅ |
-| 16 | Exportar y restaurar un respaldo completo | Lógica: restauración en **otra** base (otra instalación) con todas las tablas idénticas, fotos binarias incluidas e integridad correcta. E2E: descarga del archivo, borrado total y restauración por el selector de archivos | ✅ |
-| 17 | Archivo corrupto no altera los datos | Vacío, truncado, otro formato, suma alterada, versión futura, conteo erróneo, campo inválido, identificador repetido y referencia rota: todos rechazados con la base idéntica. Un fallo simulado de escritura **a mitad** de la restauración revierte todo | ✅ |
-| 18 | Conflictos o duplicados al importar | Detecta misma instalación, respaldo más antiguo que los datos y respaldo ya restaurado. El reemplazo exige escribir REEMPLAZAR, guarda una copia interna y "Deshacer" recupera los datos exactos. Combinar no se ofrece (explicado en pantalla) | ✅ |
-| 19 | Reiniciar la app y comprobar persistencia | Navegador con perfil persistente: crear datos, recargar, **cerrar el navegador completo** y volver a abrir. Los datos siguen ahí | ✅ (Chromium) |
-| 20 | Trabajar sin conexión | Service worker activo, red desconectada (comprobado que `fetch` externo falla), recarga, y crear inventario, comprar y vender sin conexión | ✅ (Chromium) |
-| 21 | Diseño en varios tamaños | 11 pantallas × 8 tamaños (320×568, 375×667, 393×852, 430×932, 360×740, 412×915, 820×1180 y 1280×800) sin desborde horizontal. Las 35 rutas se recorren sin errores. Capturas en `docs/capturas/` | ✅ (Chromium) |
-| 21b | Teclado abierto | Con la pantalla reducida a 390×380 (simulando el teclado), el campo enfocado queda visible | ✅ simulado |
-| 22 | Migración de esquema | Cadena de migraciones de respaldos v1→v3 y una base Dexie existente actualizada a la versión 2 conservando los datos | ✅ |
-| 23 | No se envían datos a servidores | Todas las peticiones de un flujo completo van a la propia app, y un `fetch` a un servidor externo queda bloqueado por la política de seguridad | ✅ |
-| 24 | Experiencia básica en iOS y Android | **No probado en dispositivos ni simuladores.** Solo Chromium con emulación móvil (táctil, tamaños, densidad 2×), que usa el mismo motor que el WebView de Android | ⚠️ Pendiente |
+1. **Costo completado después de vender (v1):** los movimientos de la unidad no se actualizaban; con el capital nuevo eso hacía que el crecimiento no cuadrara con la ganancia. Ahora se corrigen al completar el costo y en la migración.
+2. **Baja de una unidad con costo desconocido y una reparación pagada (v1):** el costo de la reparación nunca se reconocía como pérdida. Corregido (y migrado).
+3. **Redondeo:** el precio mínimo de 1 500 000 con 10 % daba 1 650 001 por coma flotante. Corregido con tolerancia.
+4. **Resumen mensual:** contaba las deudas abiertas hoy en lugar de las abiertas al cierre del mes. Corregido.
+5. **Gasto de intereses anulable por fuera de su abono:** dejaba el abono incoherente. Ahora se anula solo desde el abono.
+
+Errores corregidos en la v1 (siguen cubiertos por las pruebas): recarga inesperada en la primera visita, diálogos que enviaban el formulario de fondo, consultas repetidas sin parar y etiquetas partidas a 320 px.
+
+## Pruebas de la versión 1 (siguen pasando)
+
+Las 24 pruebas obligatorias de la v1 (inventarios y modos, compras, ventas, stock insuficiente, ventas duplicadas, finanzas con caso conocido, cobros, gastos sin doble descuento, devoluciones, días en inventario, fechas desconocidas, vistas consolidadas, respaldo y restauración, archivos corruptos, conflictos al importar, persistencia, sin conexión, diseño, migraciones y privacidad) siguen en `tests/unit` y `tests/e2e` y pasan con la v2.
 
 ## Lo que NO se pudo probar aquí (y por qué)
 
 | Aspecto | Motivo | Cómo probarlo |
 |---|---|---|
-| Safari / iOS (instalación en la pantalla de inicio, almacenamiento, Web Share con archivos, selector de Archivos) | No hay WebKit ni iPhone en este entorno | Lista de verificación de abajo |
-| APK en Android (botón Atrás, compartir nativo, Guardar en Documentos, selector de archivos, cámara, márgenes del sistema) | No se pudo compilar: el Android SDK y Google Maven están bloqueados por la red del entorno | Compilar con GitHub Actions o Android Studio y seguir la lista de abajo |
-| Transferencia real entre un iPhone y un Android | Requiere dos dispositivos físicos | Lista de abajo (paso 8) |
-| Cierre forzado del sistema operativo (matar el proceso) | Solo se simuló cerrando el navegador completo | Lista de abajo (paso 3) |
+| Safari / iOS (instalación, almacenamiento, compartir imagen/PDF con Web Share, selector de Archivos, impresión del manual) | No hay WebKit ni iPhone en este entorno | Lista de verificación de abajo |
+| APK en un teléfono Android (botón Atrás, compartir nativo de imagen/PDF, selector de archivos, cámara, márgenes) | El APK se compila y firma en GitHub Actions, pero no hay un teléfono para instalarlo | Lista de abajo |
+| Actualización real v1 → v2 en un teléfono | Probada con la base real de la v1 en Chromium y en la capa de datos; no en un teléfono con datos reales | Hacer un respaldo antes de actualizar (lista, paso 1) |
+| Transferencia real entre un iPhone y un Android | Requiere dos dispositivos físicos | Lista de abajo |
 
-Los archivos de Android se validaron sin compilar:
-- XML bien formado.
-- Scripts Gradle con sintaxis Groovy correcta.
-- Íconos y pantalla de inicio generados.
+## Lista de verificación en dispositivos físicos (≈ 20 minutos por teléfono)
 
-## Lista de verificación en dispositivos físicos (≈ 15 minutos por teléfono)
-
-1. Instalar (iPhone: Safari → Añadir a pantalla de inicio; Android: APK) y abrir desde el icono.
-2. Crear un inventario y registrar una compra de 2 teléfonos y una venta con pago parcial.
-3. **Cierre forzado:** cerrar la app desde el selector de apps y reabrirla. Los datos deben seguir ahí. Reiniciar el teléfono y comprobar de nuevo.
-4. **Sin conexión:** activar el modo avión, reabrir y registrar una venta.
-5. Teclado: en "Registrar venta", tocar el campo Descuento y comprobar que el teclado no lo tapa.
-6. Respaldo → Preparar → Compartir: debe abrir el menú nativo (AirDrop o WhatsApp en iPhone; WhatsApp, Drive o Bluetooth en Android). En Android, probar también "Guardar en Documentos".
-7. Respaldo → Elegir archivo: debe abrir el selector de archivos y mostrar el resumen.
-8. **Entre teléfonos:** exportar en el iPhone, enviar al Android, importar y comprobar los totales. Repetir en sentido contrario.
-9. Android: el botón Atrás cierra diálogos, vuelve atrás y en Inicio sale de la app.
-10. Modo profesional → ficha de unidad → Tomar foto: debe abrir la cámara y guardar la foto.
-11. iPhone/Android con notch o barra de gestos: nada queda tapado por la barra de estado ni por la barra inferior.
+1. **Antes de actualizar de la v1:** Respaldo → Preparar respaldo → guardarlo fuera del teléfono.
+2. Actualizar (iPhone: abrir la app con internet y tocar "Actualizar ahora"; Android: instalar el APK nuevo encima, sin desinstalar). Debe salir "¡Novedades!" y tus datos deben seguir ahí.
+3. Capital → Aporte: registrar el dinero con el que empiezas. Revisar que la caja tenga sentido; si no, "Cuadrar caja".
+4. Registrar una compra con "Tarjeta de crédito" y una pieza cambiada; ver la deuda en Deudas y la pieza en la ficha.
+5. Precios de mercado → anotar un precio; Registrar venta → "Usar sugerido".
+6. Resumen mensual → "Compartir imagen" y "Compartir PDF": debe abrir el menú nativo (WhatsApp, AirDrop, Drive…).
+7. Ayuda → Manual completo → descargar/compartir el PDF.
+8. Ayuda → Modo práctica → entrar, mirar, salir: tus datos reales deben estar intactos.
+9. **Cierre forzado y reinicio del teléfono:** los datos siguen ahí.
+10. **Sin conexión:** modo avión, reabrir y registrar una venta.
+11. **Entre teléfonos:** exportar en uno, importar en el otro y comprobar los totales.
+12. Android: el botón Atrás cierra diálogos, vuelve atrás y en Inicio sale de la app.
 
 ## Cómo volver a ejecutar las pruebas
 
 ```bash
 npm ci
-npm test                     # 40 pruebas de lógica (~3 s)
+npm test                     # 64 pruebas de lógica (~3 s)
 npm run build
-npx playwright test          # 13 pruebas E2E (~4 min). Requiere el navegador Chromium de Playwright
+npx playwright test          # 17 pruebas E2E (~5 min). Requiere el navegador Chromium de Playwright
 ```
+
+Para regenerar el manual en PDF (después de cambiar la ayuda): `npm run build`, `npm run preview` en otra terminal y `node scripts/make-manual-pdf.mjs`; luego `npm run build` otra vez.

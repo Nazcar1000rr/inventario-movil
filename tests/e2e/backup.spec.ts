@@ -22,7 +22,7 @@ async function wipeAll(page: Page) {
   await page.goto('/#/ajustes');
   await page.getByRole('button', { name: 'Borrar todos los datos' }).click();
   await confirmTyped(page, 'BORRAR');
-  await expect(page.getByText('Empiece creando su primer inventario')).toBeVisible();
+  await expect(page.getByText('Empieza creando tu primer inventario')).toBeVisible();
 }
 
 async function chooseFile(page: Page, path: string) {
