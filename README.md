@@ -6,6 +6,10 @@ Aplicación en español para administrar el inventario de un negocio de teléfon
 - **Android:** se instala con un archivo APK, sin Google Play.
 - **Sin servidor, sin cuentas y sin nube.** Cada teléfono guarda sus propios datos. Para pasar datos de un teléfono a otro se exporta e importa un archivo de respaldo, de forma manual.
 
+**Instalar:**
+- **iPhone:** abrir <https://nazcar1000rr.github.io/inventario-movil/> en Safari → Compartir → *Añadir a pantalla de inicio*.
+- **Android:** descargar <https://github.com/Nazcar1000rr/inventario-movil/releases/latest/download/inventario-movil.apk> e instalarlo (para actualizar, instalar encima sin desinstalar).
+
 > Guía de instalación paso a paso: **[docs/INSTALACION.md](docs/INSTALACION.md)**
 > Arquitectura, modelo de datos y reglas de cálculo: **[docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)**
 > Pruebas ejecutadas y resultados reales: **[docs/PRUEBAS.md](docs/PRUEBAS.md)**
@@ -20,8 +24,8 @@ Aplicación en español para administrar el inventario de un negocio de teléfon
 | Lógica de negocio y base de datos local | ✅ Terminada. 40 pruebas automáticas, todas aprobadas |
 | Interfaz (35 pantallas) | ✅ Terminada. 13 pruebas de extremo a extremo en Chromium, todas aprobadas |
 | PWA (manifiesto, service worker, iconos, uso sin conexión) | ✅ Compilada y probada en Chromium |
-| PWA publicada en una URL HTTPS | ⛔ **No publicada.** No hay alojamiento disponible en este entorno. Archivos listos y flujo de GitHub Pages incluido |
-| APK de Android | ⛔ **No compilado aquí.** La red de este entorno bloquea el Android SDK y Google Maven. El proyecto está listo, junto con un flujo de GitHub Actions que compila el APK firmado y con los comandos para Android Studio |
+| PWA publicada en una URL HTTPS | ✅ Publicada con GitHub Pages en https://nazcar1000rr.github.io/inventario-movil/ |
+| APK de Android | ✅ Compilado y firmado en GitHub Actions (firma verificada). Se publica en Releases en cada cambio |
 | Clave de firma del APK | ✅ Generada y entregada **por separado** (no está en el código) |
 | Pruebas en iPhone o Android físicos, o en Safari | ⛔ **No realizadas** (no hay dispositivos ni Safari/WebKit en este entorno). Ver la lista de verificación en docs/PRUEBAS.md |
 
