@@ -22,6 +22,12 @@ Entorno:
 | Sonar con el iPhone en silencio | E2E simulando la API de sesión de audio de iOS: la opción pone el tipo "playback" (y "auto" al quitarla) y se recuerda | ✅ (simulado) |
 | Logo | Íconos de la PWA, adaptable de Android y splash generados y revisados a la vista | ✅ |
 
+### Errores reales encontrados y corregidos (v2.2)
+
+1. El manual en PDF salía en blanco: con las animaciones nuevas, el contenido empezaba transparente justo cuando se imprimía. Ahora, al imprimir o guardar en PDF no hay animaciones (comprobado: el manual vuelve a tener todo su texto).
+2. Dos combinaciones de color no llegaban al contraste mínimo (inicio del degradado verde y chips en coral). Se oscurecieron.
+3. Un texto nuevo usaba "toque" (forma de usted según la prueba de tono). Se reescribió.
+
 **No probado aquí:** la voz real (iPhone y motor de voz de Android), el sonido real con el interruptor de silencio del iPhone y el logo en la pantalla de inicio de un teléfono. Ver la lista de verificación.
 
 ## Versión 2.1: qué se probó

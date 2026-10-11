@@ -1826,3 +1826,12 @@ input[type='radio'],
 input[type='range'] {
   accent-color: var(--primary);
 }
+/* Al imprimir o guardar en PDF, nada de animaciones (el contenido debe verse completo) */
+@media print {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
