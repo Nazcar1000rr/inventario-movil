@@ -25,8 +25,8 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 | Interfaz | ✅ 21 pruebas de extremo a extremo en Chromium, todas aprobadas |
 | Conversión automática de los datos de la v1 | ✅ Probada con una base real de la v1 (en la capa de datos y en el navegador) y con respaldos de la v1 |
 | Conversión automática de los datos de la v2 (lotes) | ✅ Probada con una base real de la v2 y con respaldos de la v2 (en la capa de datos, con el mismo código Dexie de la app) |
-| PWA publicada en HTTPS | ✅ Versión 2.0.0 publicada con GitHub Pages (comprobado que la dirección sirve la compilación nueva). Se republica en cada cambio |
-| APK de Android | ✅ Versión 2.0.0 (compilación 6) compilada y firmada en GitHub Actions y publicada en *Releases*. Comprobado que está firmado con la misma clave que la v1 (se puede instalar encima) |
+| PWA publicada en HTTPS | ✅ Versión 2.1.0 publicada con GitHub Pages (comprobado que la dirección sirve la compilación nueva, versión 294f42f1cf55). Se republica en cada cambio |
+| APK de Android | ✅ Versión 2.1.0 (compilación 7) compilada y firmada en GitHub Actions y publicada en *Releases*. Comprobado que está firmado con la misma clave que la v1 y la v2 (se puede instalar encima) y que trae la compilación 2.1.0 |
 | Clave de firma del APK | Entregada **por separado** (no está en el código) |
 | Pruebas en iPhone o Android físicos, o en Safari | ⛔ **No realizadas** (no hay dispositivos ni Safari/WebKit en este entorno). Ver la lista de verificación en docs/PRUEBAS.md |
 
