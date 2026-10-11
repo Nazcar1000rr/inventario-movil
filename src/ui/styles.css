@@ -1199,3 +1199,170 @@ details.more > .stack {
   overflow: visible;
   text-overflow: clip;
 }
+
+/* ===== v2.1 ===== */
+.ok-text {
+  color: var(--success);
+  font-weight: 600;
+}
+.bad-text {
+  color: var(--danger);
+  font-weight: 600;
+}
+.tight-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.tight-list li {
+  margin: 2px 0;
+}
+.choice-cards {
+  display: grid;
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .choice-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.choice-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  min-height: 48px;
+}
+.choice-card[aria-pressed='true'] {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 1px var(--primary) inset;
+}
+.choice-card > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--primary);
+}
+.tip-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--info-soft);
+  border: 1px solid var(--border);
+}
+.tip-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+/* Recorridos guiados */
+.tour-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  pointer-events: none;
+}
+.tour-block {
+  position: fixed;
+  background: rgba(10, 14, 20, 0.62);
+  pointer-events: auto;
+}
+.tour-hole {
+  position: fixed;
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px var(--primary), 0 0 0 7px rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  transition: all 0.18s ease;
+}
+.tour-card {
+  position: fixed;
+  pointer-events: auto;
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  transition: top 0.18s ease, left 0.18s ease;
+}
+.tour-title {
+  font-size: 1.05rem;
+  margin: 2px 0 6px;
+}
+.tour-dots {
+  display: flex;
+  gap: 5px;
+  margin: 10px 0;
+}
+.tour-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+}
+.tour-dots span.on {
+  background: var(--primary);
+}
+.tour-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* Lecciones */
+.lesson-emoji {
+  font-size: 1.5rem;
+  width: 32px;
+  text-align: center;
+  flex: none;
+}
+.quiz-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  min-height: 48px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.quiz-option:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.quiz-option.right {
+  border-color: var(--success);
+  background: var(--success-soft);
+  font-weight: 600;
+}
+.quiz-option.wrong {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.calc-out {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.daily-tip .tip-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.btn.wrap-btn {
+  white-space: normal;
+  text-align: center;
+  height: auto;
+  min-height: 48px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}

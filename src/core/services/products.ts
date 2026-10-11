@@ -3,6 +3,7 @@ import type {
   ID,
   ISODate,
   Inspection,
+  Costing,
   Money,
   PartChange,
   PartChangedBy,
@@ -37,6 +38,7 @@ import {
   requireUnit,
 } from './base';
 import { claimOp, consumeQuantity, tx, unitCost } from './stock';
+import { addLot, consumeLots, usesLots } from './lots';
 import { applyKnownCostToMovement } from '../db';
 import { PART_KEYS, normalizeCondition, partLabel } from '../catalog';
 
@@ -80,6 +82,8 @@ export interface ProductInput {
   lowStockThreshold?: number | null;
   location?: string;
   notes?: string;
+  /** Solo productos por cantidad. Si no se indica, se usa la configuración (lotes por defecto). */
+  costing?: Costing;
 }
 
 export function buildProductName(i: Pick<ProductInput, 'name' | 'brand' | 'model' | 'variant' | 'capacity' | 'color' | 'reference'>): string {
@@ -133,11 +137,13 @@ export async function createProduct(
         fail('duplicate_product', `Ya existe "${similar[0].name}" en este inventario. Usa el existente o confirma que es distinto.`, 'name');
     }
     const now = nowISO();
+    const tracking = input.tracking ?? defaultTracking(input.kind);
+    const settings = await getSettings(db);
     const p: Product = {
       id: newId(),
       inventoryId: input.inventoryId,
       kind: input.kind,
-      tracking: input.tracking ?? defaultTracking(input.kind),
+      tracking,
       name,
       brand,
       model,
@@ -153,6 +159,7 @@ export async function createProduct(
       qty: 0,
       stockValue: 0,
       unknownCostQty: 0,
+      costing: tracking === 'quantity' ? input.costing ?? (settings.lotsByDefault ? 'lots' : 'average') : 'average',
       archived: false,
       createdAt: now,
       updatedAt: now,
@@ -412,6 +419,7 @@ export async function registerInitialStock(db: AppDB, input: InitialStockInput):
         unknownCostQty: p.unknownCostQty + (cost === null ? q : 0),
         updatedAt: nowISO(),
       });
+      if (usesLots(p)) await addLot(db, { product: p, source: 'initial', qty: q, value: cost === null ? null : value, date, notes: cleanStr(input.notes ?? '', 300) });
       await addMovement(db, {
         at,
         inventoryId: p.inventoryId,
@@ -449,6 +457,8 @@ export interface AdjustInput {
   unitCost?: Money | null; // solo entradas
   date: ISODate;
   reason: string;
+  /** Salidas de productos con lotes: lote del que sale primero (por defecto, el más antiguo). */
+  lotId?: ID | null;
 }
 
 /** Entrada: corrige faltantes encontrados. Salida: pérdida/daño/robo, se reconoce como baja a costo promedio. */
@@ -471,6 +481,7 @@ export async function adjustQuantity(db: AppDB, input: AdjustInput): Promise<voi
         unknownCostQty: p.unknownCostQty + (cost === null ? q : 0),
         updatedAt: nowISO(),
       });
+      if (usesLots(p)) await addLot(db, { product: p, source: 'adjust', qty: q, value: cost === null ? null : value, date, notes: reason });
       await addMovement(db, {
         at: date,
         inventoryId: p.inventoryId,
@@ -486,7 +497,12 @@ export async function adjustQuantity(db: AppDB, input: AdjustInput): Promise<voi
         notes: reason,
       });
     } else {
-      const c = consumeQuantity(p, q);
+      let c: { cogs: Money; unknownQty: number; qty: number; stockValue: Money; unknownCostQty: number };
+      if (usesLots(p)) {
+        if (q > p.qty) fail('insufficient_stock', `Stock insuficiente de "${p.name}": hay ${p.qty} disponible(s) y se intentan sacar ${q}.`, 'quantity');
+        const r = await consumeLots(db, p, q, input.lotId);
+        c = { cogs: r.cogs, unknownQty: r.unknownQty, qty: p.qty - q, stockValue: p.stockValue - r.cogs, unknownCostQty: p.unknownCostQty - r.unknownQty };
+      } else c = consumeQuantity(p, q);
       await db.products.update(p.id, { qty: c.qty, stockValue: c.stockValue, unknownCostQty: c.unknownCostQty, updatedAt: nowISO() });
       await addMovement(db, {
         at: date,

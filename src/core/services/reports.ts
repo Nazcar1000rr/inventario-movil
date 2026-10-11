@@ -2,6 +2,7 @@ import type { AppDB } from '../db';
 import type { ID, ISODate, Money, Movement, Product, ProductKind, Sale, SaleLine, Settings } from '../types';
 import { conditionGroup } from '../catalog';
 import { daysBetween, startOfDay } from '../util';
+import { lotOrder } from '../lots';
 import { getSettings } from './base';
 import { groupKey } from './consolidated';
 import { computeSaleBalance } from './sales';
@@ -98,7 +99,7 @@ export function periodRange(kind: PeriodKind, now = new Date(), custom?: { from:
   };
 }
 
-function inPeriod(iso: ISODate, p: Period): boolean {
+export function inPeriod(iso: ISODate, p: Period): boolean {
   return iso >= p.from && iso < p.to;
 }
 
@@ -352,6 +353,8 @@ export interface AgingItem {
   productName: string;
   kind: ProductKind;
   unitId: ID | null;
+  /** Lote (productos por cantidad con lotes). */
+  lotId?: ID | null;
   code: string;
   qty: number;
   since: ISODate | null;
@@ -430,7 +433,32 @@ export async function getUnsoldAging(db: AppDB, inventoryIds: ID[] | null, now =
     const { voidedSales, voidedPurchases } = await voidedSets(db);
     const movs = await db.movements.where('productId').anyOf(qtyProducts.map((p) => p.id)).toArray();
     const byP = groupBy(movs, (m) => m.productId);
+    const lotProducts = qtyProducts.filter((p) => p.costing === 'lots');
+    const lotsByP = groupBy(lotProducts.length ? await db.lots.where('productId').anyOf(lotProducts.map((p) => p.id)).toArray() : [], (l) => l.productId);
     for (const p of qtyProducts) {
+      if (p.costing === 'lots') {
+        // Con lotes: cada lote es una capa con su fecha y su costo real
+        for (const l of (lotsByP.get(p.id) ?? []).filter((x) => x.qty > 0).sort(lotOrder)) {
+          const days = l.date ? daysBetween(l.date, now) : null;
+          items.push({
+            ...flags(days, ''),
+            type: 'lot',
+            inventoryId: p.inventoryId,
+            productId: p.id,
+            productName: p.name,
+            kind: p.kind,
+            unitId: null,
+            lotId: l.id,
+            code: '',
+            qty: l.qty,
+            since: l.date,
+            days,
+            cost: l.costKnown ? l.value : null,
+            status: 'available',
+          });
+        }
+        continue;
+      }
       const { layers } = replayFifo(byP.get(p.id) ?? [], voidedSales, voidedPurchases);
       const avg = p.qty - p.unknownCostQty > 0 ? Math.round(p.stockValue / (p.qty - p.unknownCostQty)) : null;
       for (const L of layers) {
@@ -519,12 +547,40 @@ export async function getSoldObservations(db: AppDB, period: Period | null, inve
     const { voidedSales, voidedPurchases } = await voidedSets(db);
     const movs = await db.movements.where('productId').anyOf(pids).toArray();
     const byP = groupBy(movs, (m) => m.productId);
+    // Líneas vendidas con lotes: la fecha de ingreso de cada lote es exacta
+    const lotSales = new Set<string>();
+    for (const l of qtyLines) {
+      if (!l.lotAllocations?.length) continue;
+      const p = products.get(l.productId)!;
+      const s = saleById.get(l.saleId)!;
+      lotSales.add(`${l.saleId}|${l.productId}`);
+      let remaining = l.quantity - l.returnedQty;
+      for (const t of l.lotAllocations) {
+        const q = Math.min(t.qty, remaining);
+        if (q <= 0) break;
+        remaining -= q;
+        out.push({
+          saleId: s.id,
+          inventoryId: s.inventoryId,
+          productId: p.id,
+          productName: p.name,
+          groupKey: groupKey(p),
+          kind: p.kind,
+          code: '',
+          qty: q,
+          saleDate: s.date,
+          since: t.date,
+          days: t.date ? Math.max(0, daysBetween(t.date, s.date)) : null,
+        });
+      }
+    }
     for (const pid of pids) {
       const p = products.get(pid)!;
       const { sold } = replayFifo(byP.get(pid) ?? [], voidedSales, voidedPurchases);
       for (const o of sold) {
         const s = saleById.get(o.saleId);
         if (!s) continue;
+        if (lotSales.has(`${o.saleId}|${pid}`)) continue;
         out.push({
           saleId: s.id,
           inventoryId: s.inventoryId,

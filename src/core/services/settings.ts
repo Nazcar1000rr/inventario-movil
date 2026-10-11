@@ -99,6 +99,9 @@ export async function updateSettings(db: AppDB, patch: SettingsPatch): Promise<S
     }
     next.paymentFees = fees;
     next.showGettingStarted = next.showGettingStarted !== false;
+    next.lotsByDefault = next.lotsByDefault !== false;
+    next.personalSpendingTips = next.personalSpendingTips !== false;
+    next.dailyTips = next.dailyTips !== false;
     next.businessName = cleanStr(next.businessName, 80);
     next.conditions = next.conditions.map((c) => cleanStr(c, 40)).filter(Boolean);
     if (next.conditions.length === 0) next.conditions = [...DEFAULT_SETTINGS.conditions];

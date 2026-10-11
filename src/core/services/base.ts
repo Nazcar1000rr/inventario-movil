@@ -28,6 +28,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   paymentFees: { Efectivo: 0, Transferencia: 0, Nequi: 0, Daviplata: 0, Tarjeta: 0, Otro: 0 },
   showGettingStarted: true,
+  lotsByDefault: true,
+  personalSpendingTips: true,
+  dailyTips: true,
 };
 
 /** Combina lo guardado con los valores por defecto (los campos nuevos de versiones posteriores quedan con su valor por defecto). */

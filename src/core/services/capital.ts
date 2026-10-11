@@ -64,6 +64,9 @@ export interface CapitalInput {
   amount: Money;
   inventoryId?: ID | null;
   notes?: string;
+  /** v2.1: gasto personal (solo retiros y préstamos a ti). */
+  personal?: boolean;
+  tag?: string;
 }
 
 function ownerLoanOutstanding(list: CapitalMovement[], inventoryId: ID | null): Money {
@@ -104,6 +107,7 @@ export async function addCapitalMovement(db: AppDB, input: CapitalInput): Promis
       date,
       amount,
       notes: cleanStr(input.notes ?? '', 500),
+      ...(input.personal && (input.kind === 'withdrawal' || input.kind === 'owner_loan') ? { personal: true, tag: cleanStr(input.tag ?? '', 40) } : {}),
       status: 'active',
       createdAt: nowISO(),
     };
@@ -113,7 +117,7 @@ export async function addCapitalMovement(db: AppDB, input: CapitalInput): Promis
       entityId: c.id,
       inventoryId,
       action: 'create',
-      summary: `${CAPITAL_KIND_LABEL[c.kind]}: ${amount}`,
+      summary: `${c.personal ? `Gasto personal${c.tag ? ` (${c.tag})` : ''} · ` : ''}${CAPITAL_KIND_LABEL[c.kind]}: ${amount}`,
     });
     return c;
   });

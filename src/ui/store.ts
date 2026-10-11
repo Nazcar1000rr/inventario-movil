@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 import { AppError, DB_NAME, errorMessage, getDB, type AppDB } from '../core';
+import { playSound, soundForMessage } from './sound';
 
 /* ---------------- Modo práctica ---------------- */
 
@@ -112,13 +113,17 @@ export function useAction(): ActionState {
     setField(null);
     try {
       const r = await fn();
-      if (okMessage) toast(okMessage);
+      if (okMessage) {
+        toast(okMessage);
+        playSound(soundForMessage(okMessage));
+      }
       return r;
     } catch (e) {
       const msg = errorMessage(e);
       setError(msg);
       setField(e instanceof AppError ? e.field ?? null : null);
       toast(msg, 'error', 5000);
+      playSound('error');
       return undefined;
     } finally {
       lock.current = false;

@@ -7,6 +7,7 @@ import { Card, confirmAction, Empty, Field, FormError, IntInput, KV, ListItem, L
 import { getStorageStatus, isNative, platformName, requestPersistence, type StorageStatus } from '../platform';
 import { useRoute } from '../router';
 import { db, useAction, useLive } from '../store';
+import { playSound, setSoundOn, setVolume, SOUNDS, useSoundPrefs } from '../sound';
 
 declare const __APP_VERSION__: string;
 
@@ -14,6 +15,8 @@ export function MoreScreen() {
   const items: [string, string, string, string?][] = [
     ['/capital', 'Capital', 'trend', 'Cuánto vale tu negocio y cuánto crece'],
     ['/deudas', 'Deudas y préstamos', 'card', 'Tarjeta, proveedores, préstamos y lo que te prestaste'],
+    ['/personal', 'Gastos personales', 'wallet', 'Gustos y gastos hormiga: ¿salen de tus ganancias o del capital?'],
+    ['/aprende', 'Aprende de negocios', 'star', 'Lecciones cortas con ejemplos, calculadoras y preguntas'],
     ['/informes', 'Informes', 'chart', 'Finanzas, tiempos, más vendidos y rentabilidad'],
     ['/resumen', 'Resumen mensual', 'image', 'Imagen o PDF para compartir'],
     ['/precios', 'Precios de mercado', 'tag', 'Historial de precios y precio sugerido'],
@@ -202,6 +205,21 @@ function SettingsForm({ initial }: { initial: Settings }) {
           </div>
         </Card>
 
+        <Card title="Inventario y consejos">
+          <div className="stack">
+            <label className="check">
+              <input type="checkbox" checked={s.lotsByDefault !== false} onChange={(e) => set('lotsByDefault', e.target.checked)} data-testid="lots-default" /> Separar por precio de compra (lotes) en productos nuevos por cantidad
+            </label>
+            <p className="tiny muted">Cada compra queda en su propio lote con su precio y, al vender, sale primero lo más antiguo. Puedes apagarlo en cada producto desde su ficha.</p>
+            <label className="check">
+              <input type="checkbox" checked={s.personalSpendingTips !== false} onChange={(e) => set('personalSpendingTips', e.target.checked)} /> Consejos al registrar gastos personales
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={s.dailyTips !== false} onChange={(e) => set('dailyTips', e.target.checked)} /> Consejo del día en Inicio
+            </label>
+          </div>
+        </Card>
+
         <Card title="Recordatorios">
           <div className="grid-2">
             <Field label="Avisar garantías con (días)" htmlFor="st-war" error={err('warrantyAlertDays')}>
@@ -222,6 +240,8 @@ function SettingsForm({ initial }: { initial: Settings }) {
           </button>
         </div>
       </form>
+
+      <SoundsCard />
 
       <Card title="Privacidad y almacenamiento">
         <div className="stack">
@@ -279,6 +299,42 @@ function SettingsForm({ initial }: { initial: Settings }) {
         </div>
       </Card>
     </Page>
+  );
+}
+
+/** Sonidos: cada uno se activa o desactiva por separado (se guarda al instante, solo en este teléfono). */
+function SoundsCard() {
+  const prefs = useSoundPrefs();
+  return (
+    <Card title="Sonidos">
+      <div className="stack" data-testid="sounds-card">
+        <p className="small muted">Actívalos o desactívalos uno por uno. Toca ▶ para escucharlos. Se guarda al instante.</p>
+        <ul className="list">
+          {SOUNDS.map((x) => (
+            <li key={x.id}>
+              <div className="item" style={{ cursor: 'default' }}>
+                <label className="check grow" style={{ alignItems: 'flex-start' }}>
+                  <input type="checkbox" checked={prefs.on[x.id]} onChange={(e) => setSoundOn(x.id, e.target.checked)} data-testid={`sound-${x.id}`} data-sound="none" />
+                  <span>
+                    <span className="strong" style={{ display: 'block' }}>
+                      {x.label}
+                    </span>
+                    <span className="tiny muted">{x.hint}</span>
+                  </span>
+                </label>
+                <button type="button" className="icon-btn" aria-label={`Escuchar: ${x.label}`} data-sound="none" disabled={!prefs.on[x.id]} onClick={() => playSound(x.id)}>
+                  <Icon name="play" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <Field label={`Volumen: ${Math.round(prefs.volume * 100)} %`} htmlFor="snd-vol">
+          <input id="snd-vol" type="range" min={0} max={100} step={10} value={Math.round(prefs.volume * 100)} onChange={(e) => setVolume(Number(e.target.value) / 100)} onPointerUp={() => playSound('success')} />
+        </Field>
+        <p className="tiny muted">En iPhone, si el teléfono está en silencio es posible que no suenen.</p>
+      </div>
+    </Card>
   );
 }
 

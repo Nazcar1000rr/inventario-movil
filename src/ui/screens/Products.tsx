@@ -16,6 +16,8 @@ import {
   type ID,
   type Movement,
   type Product,
+  type Purchase,
+  type Unit,
   type UnitStatus,
   type PartInput,
   type UnitDetails,
@@ -45,6 +47,7 @@ import {
 import { goBack, navigate } from '../router';
 import { db, useAction, useLive, usePref } from '../store';
 import { ConditionChips, PartsBadges, PartsEditor, STANDARD_CONDITIONS } from '../components/parts';
+import { LotSelect, LotsCard, PriceHistoryCard } from '../components/lots';
 import { Kpi } from './Home';
 
 /* ================= Crear / editar producto ================= */
@@ -62,7 +65,7 @@ function ProductCreate({ inventoryId }: { inventoryId: string | null }) {
       {!invs ? (
         <Loading />
       ) : invs.filter((i) => !i.archived).length === 0 ? (
-        <Empty title="Primero cree un inventario">
+        <Empty title="Primero crea un inventario">
           <a className="btn primary" href="#/inventarios">
             Ir a inventarios
           </a>
@@ -201,13 +204,17 @@ export function ProductDetailScreen({ id }: { id: ID }) {
         p.tracking === 'unit' ? d.units.where('productId').equals(id).toArray() : Promise.resolve([]),
         d.movements.where('productId').equals(id).toArray(),
       ]);
-      return { p, inv: inv!, units, moves: moves.sort((a, b) => b.seq - a.seq) };
+      const pids = [...new Set(units.map((u) => u.purchaseId).filter(Boolean) as ID[])];
+      const purchases = new Map((pids.length ? await d.purchases.bulkGet(pids) : []).filter((x) => !!x).map((x) => [x!.id, x!]));
+      const suppliers = new Map((await d.suppliers.toArray()).map((x) => [x.id, x.name]));
+      return { p, inv: inv!, units, moves: moves.sort((a, b) => b.seq - a.seq), purchases, suppliers };
     },
     [id],
   );
   const [status, setStatus] = useState<'available' | 'in_review' | 'damaged' | 'sold' | 'archived' | 'all'>('available');
   const [partsFilter, setPartsFilter] = useState<'any' | 'repaired' | 'generic' | 'clean'>('any');
   const [adjust, setAdjust] = useState(false);
+  const [grouping, setGrouping] = usePref('unitGrouping', 'unit');
   const act = useAction();
 
   const unitsFiltered = useMemo(() => {
@@ -253,7 +260,7 @@ export function ProductDetailScreen({ id }: { id: ID }) {
               onSelect: async () => {
                 const ok = await confirmAction({
                   title: p.archived ? 'Reactivar producto' : 'Archivar producto',
-                  message: p.archived ? 'Volverá a aparecer en las listas.' : 'Solo se puede archivar sin existencias. Su historial se conserva.',
+                  message: p.archived ? 'Volverá a aparecer en las listas.' : 'Solo se puede archivar sin existencias. El historial se conserva.',
                   confirmText: p.archived ? 'Reactivar' : 'Archivar',
                 });
                 if (ok) await act.run(() => setProductArchived(db, id, !p.archived), p.archived ? 'Producto reactivado' : 'Producto archivado');
@@ -268,7 +275,7 @@ export function ProductDetailScreen({ id }: { id: ID }) {
       <div className="kpis">
         <Kpi label="Disponibles" value={avail} money={false} foot={p.tracking === 'unit' && count('in_review') + count('damaged') ? `+${count('in_review')} en revisión, ${count('damaged')} dañadas` : undefined} />
         <Kpi label="Valor a costo" value={value} foot={unknown ? `⚠ ${unknown} sin costo conocido` : undefined} />
-        <Kpi label={p.tracking === 'quantity' ? 'Costo promedio' : 'Costo medio'} value={avg ?? 0} text={avg === null ? '—' : undefined} foot={avg === null ? 'Sin datos de costo' : p.tracking === 'quantity' ? 'Promedio ponderado' : undefined} />
+        <Kpi label={p.tracking === 'quantity' ? 'Costo promedio' : 'Costo medio'} value={avg ?? 0} text={avg === null ? '—' : undefined} foot={avg === null ? 'Sin datos de costo' : p.tracking === 'quantity' ? (p.costing === 'lots' ? 'Promedio de tus lotes' : 'Promedio ponderado') : undefined} />
         <Kpi label="Precio sugerido" value={p.salePrice ?? 0} text={p.salePrice === null ? '—' : undefined} foot={p.salePrice === null ? 'No definido' : avg !== null && p.salePrice ? `Margen estimado ${formatCOP(p.salePrice - avg)}` : undefined} />
       </div>
       {canOperate ? (
@@ -313,6 +320,20 @@ export function ProductDetailScreen({ id }: { id: ID }) {
               ]}
             />
           ) : null}
+          {units.length > 1 ? (
+            <Segmented
+              label="Ver unidades"
+              value={grouping === 'purchase' ? 'purchase' : 'unit'}
+              onChange={setGrouping}
+              options={[
+                ['unit', 'Por equipo'],
+                ['purchase', 'Por compra'],
+              ]}
+            />
+          ) : null}
+          {grouping === 'purchase' && units.length > 1 ? (
+            <PurchaseGroups units={unitsFiltered} purchases={data.purchases} suppliers={data.suppliers} pro={pro} statusLabel={status} />
+          ) : (
           <Card flush>
             <Paged
               items={unitsFiltered}
@@ -349,8 +370,12 @@ export function ProductDetailScreen({ id }: { id: ID }) {
               }}
             />
           </Card>
+          )}
         </>
       ) : null}
+
+      {p.tracking === 'quantity' ? <LotsCard product={p} canOperate={canOperate} /> : null}
+      <PriceHistoryCard productId={p.id} />
 
       <Card title="Movimientos" flush>
         <Paged
@@ -386,14 +411,99 @@ export function ProductDetailScreen({ id }: { id: ID }) {
   );
 }
 
+/** Unidades agrupadas por la compra en la que entraron ("Compra del 10 oct · 3 disponibles · $X c/u"). */
+function PurchaseGroups({
+  units,
+  purchases,
+  suppliers,
+  pro,
+  statusLabel,
+}: {
+  units: Unit[];
+  purchases: Map<ID, Purchase>;
+  suppliers: Map<ID, string>;
+  pro: boolean;
+  statusLabel: string;
+}) {
+  const groups = new Map<string, Unit[]>();
+  for (const u of units) {
+    const k = u.purchaseId && purchases.has(u.purchaseId) ? u.purchaseId : '';
+    groups.set(k, [...(groups.get(k) ?? []), u]);
+  }
+  const list = [...groups.entries()].sort(([a], [b]) => {
+    const da = a ? purchases.get(a)!.date : '';
+    const dbb = b ? purchases.get(b)!.date : '';
+    return da < dbb ? 1 : da > dbb ? -1 : 0;
+  });
+  if (!list.length) return <Empty title="No hay unidades en este estado" />;
+  const word: Record<string, string> = { available: 'disponibles', in_review: 'en revisión', damaged: 'dañadas', sold: 'vendidas', archived: 'dadas de baja', all: 'unidades' };
+  return (
+    <div className="stack" data-testid="purchase-groups">
+      {list.map(([k, us]) => {
+        const pu = k ? purchases.get(k)! : null;
+        const costs = us.map(unitCost).filter((c): c is number => c !== null);
+        const total = costs.reduce((a, c) => a + c, 0);
+        const same = costs.length > 0 && costs.every((c) => c === costs[0]);
+        return (
+          <Card key={k || 'none'} flush>
+            <ul className="list wrap-sub">
+              <li>
+                <a className="item" href={pu ? `#/compras/${pu.id}` : undefined} style={pu ? undefined : { cursor: 'default' }}>
+                  <span className="item-main">
+                    <span className="item-title strong" style={{ display: 'block' }}>
+                      {pu ? `Compra del ${formatDate(pu.date)}` : 'Sin compra (stock que ya tenías)'}
+                    </span>
+                    <span className="item-sub" style={{ display: 'block' }}>
+                      {pu?.supplierId ? `${suppliers.get(pu.supplierId) ?? ''} · ` : ''}
+                      {us.length} {word[statusLabel] ?? 'unidades'}
+                      {costs.length ? ` · ${same ? `${formatCOP(costs[0])} c/u` : `promedio ${formatCOP(Math.round(total / costs.length))} c/u`}` : ''}
+                    </span>
+                  </span>
+                  <span className="item-side money strong">{costs.length ? formatCOP(total) : '—'}</span>
+                </a>
+              </li>
+              {us.map((u) => {
+                const c = unitCost(u);
+                const desc = [u.capacity, u.color, u.condition].filter(Boolean).join(' · ');
+                return (
+                  <li key={u.id}>
+                    <a className="item" href={`#/unidades/${u.id}`} style={{ paddingLeft: 28 }}>
+                      <span className="item-main">
+                        <span className="item-title" style={{ display: 'block' }}>
+                          {pro ? <span className="code">{u.code}</span> : null} {desc || 'Unidad'}
+                        </span>
+                        {(u.partsHistory ?? []).length ? (
+                          <span style={{ display: 'block', marginTop: 4 }}>
+                            <PartsBadges parts={u.partsHistory} compact />
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
+                        <UnitStatusBadge status={u.status} />
+                        <span className="small money">{c === null ? 'Costo desconocido' : formatCOP(c)}</span>
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 function AdjustSheet({ product, onClose }: { product: Product; onClose: () => void }) {
   const [dir, setDir] = useState<'in' | 'out'>('out');
   const [qty, setQty] = useState<number | null>(1);
   const [cost, setCost] = useState<number | null>(null);
   const [date, setDate] = useState<string | null>(nowISO());
   const [reason, setReason] = useState('');
+  const [lotId, setLotId] = useState<ID | null>(null);
   const [opId] = useState(newOpId);
   const act = useAction();
+  const lots = product.costing === 'lots';
   return (
     <Sheet title="Ajustar existencias" onClose={onClose}>
       <form
@@ -401,7 +511,7 @@ function AdjustSheet({ product, onClose }: { product: Product; onClose: () => vo
         onSubmit={async (e) => {
           e.preventDefault();
           const ok = await act.run(
-            () => adjustQuantity(db, { opId, productId: product.id, direction: dir, quantity: qty ?? 0, unitCost: dir === 'in' ? cost : null, date: date ?? '', reason }).then(() => true),
+            () => adjustQuantity(db, { opId, productId: product.id, direction: dir, quantity: qty ?? 0, unitCost: dir === 'in' ? cost : null, date: date ?? '', reason, lotId: dir === 'out' ? lotId : null }).then(() => true),
             'Ajuste registrado',
           );
           if (ok) onClose();
@@ -410,8 +520,8 @@ function AdjustSheet({ product, onClose }: { product: Product; onClose: () => vo
         <Segmented label="Tipo de ajuste" value={dir} onChange={setDir} options={[['out', 'Salida (pérdida, daño)'], ['in', 'Entrada (faltante encontrado)']]} />
         <Notice>
           {dir === 'out'
-            ? `Disponibles: ${product.qty}. La salida se valora a costo promedio y se registra como pérdida.`
-            : 'Para mercancía comprada use "Comprar"; esto es solo para corregir conteos.'}
+            ? `Disponibles: ${product.qty}. La salida se valora ${lots ? 'al costo de su lote (sale primero el más antiguo)' : 'a costo promedio'} y se registra como pérdida.`
+            : 'Para mercancía comprada usa "Comprar"; esto es solo para corregir conteos.'}
         </Notice>
         <div className="grid-2">
           <Field label="Cantidad" htmlFor="adj-q" error={act.field === 'quantity' ? act.error : null}>
@@ -423,6 +533,7 @@ function AdjustSheet({ product, onClose }: { product: Product; onClose: () => vo
             </Field>
           ) : null}
         </div>
+        {dir === 'out' && lots ? <LotSelect id="adj-lot" productId={product.id} value={lotId} onChange={setLotId} label="¿De qué lote salen?" /> : null}
         <Field label="Fecha" htmlFor="adj-d">
           <DateTimeInput id="adj-d" value={date} onChange={setDate} />
         </Field>

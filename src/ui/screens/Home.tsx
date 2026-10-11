@@ -21,7 +21,9 @@ import { Icon } from '../components/Icon';
 import { Card, Empty, Field, FormError, Loading, Notice, Page, Segmented, TextInput } from '../components/ui';
 import { isIOS, isNative, isStandalone } from '../platform';
 import { navigate } from '../router';
-import { db, useAction, useLive } from '../store';
+import { db, getPref, setPref, useAction, useLive } from '../store';
+import { DAILY_TIPS, pickTip } from '../help/content';
+import { isTourDone, startTour } from '../tour';
 
 export function Kpi({
   label,
@@ -143,6 +145,68 @@ function FirstInventory() {
   );
 }
 
+/** Ofrece el recorrido "Conoce la app" la primera vez. */
+function TourOffer() {
+  const [hidden, setHidden] = useState(() => getPref('tourOffer', '') !== '' || isTourDone('app'));
+  if (hidden) return null;
+  return (
+    <Card>
+      <div className="stack-sm" data-testid="tour-offer">
+        <p className="strong">👋 ¿Primera vez aquí?</p>
+        <p className="small">Te muestro la app en un minuto, sobre las pantallas reales. También hay lecciones cortas para entender tus números.</p>
+        <div className="row wrap">
+          <button
+            type="button"
+            className="btn primary sm"
+            onClick={() => {
+              setHidden(true);
+              startTour('app');
+            }}
+          >
+            <Icon name="play" /> Hacer el recorrido
+          </button>
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => {
+              setPref('tourOffer', 'dismissed');
+              setHidden(true);
+            }}
+          >
+            Ahora no
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/** Consejo del día (se puede apagar en Configuración). */
+function DailyTipCard() {
+  const [offset, setOffset] = useState(0);
+  const tip = pickTip(DAILY_TIPS, new Date(), offset);
+  return (
+    <div className="tip-card daily-tip" data-testid="daily-tip">
+      <span className="tip-icon">💡</span>
+      <div className="grow">
+        <p className="tiny muted">Consejo del día</p>
+        <p className="small strong">{tip.title}</p>
+        <p className="small">{tip.text}</p>
+        <div className="tip-actions">
+          {tip.to ? (
+            <a className="btn sm" href={`#${tip.to}`}>
+              {tip.toLabel ?? 'Ver más'}
+            </a>
+          ) : null}
+          <button type="button" className="btn sm" onClick={() => setOffset((o) => o + 1)}>
+            Otro consejo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function HomeScreen() {
   const scope = useScope('homeScope');
   const period = usePeriod('homePeriod');
@@ -180,8 +244,10 @@ export function HomeScreen() {
     >
       <InstallHint />
       <UpdateBanner />
+      <TourOffer />
       {invCount === 0 ? <FirstInventory /> : null}
       <GettingStartedCard />
+      {settings && settings.dailyTips !== false ? <DailyTipCard /> : null}
       {invCount ? (
         <>
           <div className="stack-sm">
@@ -195,7 +261,7 @@ export function HomeScreen() {
               <h2 className="section-title">
                 Actividad · {period.range.label}
               </h2>
-              <div className="kpis">
+              <div className="kpis" data-tour="kpis">
                 <Kpi testId="kpi-net-revenue" label="Ingresos netos" info="netRevenue" value={data.cur.netRevenue} prev={data.prev.netRevenue} foot={`${data.cur.sales.count} venta(s) · ${data.cur.sales.units} unidad(es)`} />
                 <Kpi label="Dinero cobrado" info="collected" value={data.cur.collected} prev={data.prev.collected} />
                 <Kpi

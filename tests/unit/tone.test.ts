@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /** Formas de "usted" que no deben aparecer en textos de la app (el tono es cercano: "tú"). */
-const USTED = /\b(usted|Usted|Seleccione|seleccione|Ingrese|ingrese|Indique|indique|Agregue|agregue|Describa|describa|Elija|elija|Haga|haga|Escriba|escriba|Toque|toque|Anule|anule|Revise|revise|Instale|instale|Desarchívelo|regístrela|Regístrela|Guárdelo|guárdelo|envíelos|Cierre y vuelva|Considere|Puede agregar|podrá registrar|Podrá completarlos|Sus datos|sus datos|su teléfono|Su teléfono|olvida la|guárdela|inventario vende)\b/;
+const USTED = /\b(usted|Usted|Seleccione|seleccione|Ingrese|ingrese|Indique|indique|Agregue|agregue|Describa|describa|Elija|elija|Haga|haga|Escriba|escriba|Toque|toque|Anule|anule|Revise|revise|Instale|instale|Desarchívelo|regístrela|Regístrela|Guárdelo|guárdelo|envíelos|Cierre y vuelva|Considere|Puede agregar|podrá registrar|Podrá completarlos|Sus datos|sus datos|su teléfono|Su teléfono|olvida la|guárdela|inventario vende|cree un|hágalo|use "|Su historial)\b/;
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {

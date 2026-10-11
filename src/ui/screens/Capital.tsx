@@ -65,7 +65,7 @@ export function CapitalScreen() {
         <Loading />
       ) : (
         <>
-          <div className="kpis">
+          <div className="kpis" data-tour="cap-kpis">
             <Kpi testId="kpi-business-value" label="Valor del negocio" value={data.snap.businessValue} info="businessValue" />
             <Kpi
               testId="kpi-growth"
@@ -78,7 +78,7 @@ export function CapitalScreen() {
             <Kpi label="Capital aportado" value={data.snap.netCapital} info="netCapital" foot={data.snap.goodsContributed ? `Incluye ${formatCOP(data.snap.goodsContributed)} en mercancía` : undefined} />
             <Kpi testId="kpi-cash" label="Caja calculada" value={data.snap.cash} info="cash" tone={data.snap.cash < 0 ? 'bad' : undefined} foot={data.snap.cash < 0 ? '⚠ Negativa: ¿falta registrar un aporte?' : undefined} />
           </div>
-          <div className="actions">
+          <div className="actions" data-tour="cap-actions">
             <button className="btn primary" onClick={() => setSheet({ kind: 'contribution' })}>
               <Icon name="plus" /> Aporte
             </button>
@@ -91,6 +91,9 @@ export function CapitalScreen() {
             <button className="btn" onClick={() => setSheet('count')}>
               <Icon name="calc" /> Cuadrar caja
             </button>
+            <a className="btn" href="#/personal">
+              <Icon name="wallet" /> Gastos personales
+            </a>
           </div>
           {data.snap.contributions === 0 && data.snap.goodsContributed === 0 ? (
             <Notice title="Registra el dinero con el que empezaste">
@@ -198,7 +201,7 @@ export function CapitalScreen() {
                       <li key={m.id} className="item" style={{ cursor: 'default' }} data-testid="capital-move">
                         <span className="item-main">
                           <span className="item-title" style={{ display: 'block' }}>
-                            {m.label} {m.status === 'voided' ? <Badge>Anulado</Badge> : null}
+                            {m.label} {m.personal ? <Badge kind="warn">Personal{m.tag ? ` · ${m.tag}` : ''}</Badge> : null} {m.status === 'voided' ? <Badge>Anulado</Badge> : null}
                           </span>
                           <span className="item-sub" style={{ display: 'block' }}>
                             {formatDate(m.date)} · {invName(m.inventoryId)}

@@ -1,6 +1,6 @@
 # Inventario Móvil
 
-App en español para llevar el inventario de un negocio de teléfonos (sobre todo iPhone), audífonos y accesorios: compras, ventas, pagos, devoluciones, gastos, proveedores, compradores, garantías, **capital, deudas y precios**. Calcula la rentabilidad, cuánto vale y cuánto crece el negocio, y cuánto tarda cada producto en venderse. Trabaja con pesos colombianos (COP).
+App en español para llevar el inventario de un negocio de teléfonos (sobre todo iPhone), audífonos y accesorios: compras, ventas, pagos, devoluciones, gastos, proveedores, compradores, garantías, **capital, deudas y precios**, con **lotes por precio de compra**, **gastos personales** y **lecciones de negocios** para quien está empezando. Calcula la rentabilidad, cuánto vale y cuánto crece el negocio, y cuánto tarda cada producto en venderse. Trabaja con pesos colombianos (COP).
 
 - **iPhone:** se instala como app web (PWA) desde Safari, sin App Store.
 - **Android:** se instala con un archivo APK, sin Google Play.
@@ -9,7 +9,7 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 **Instalar o actualizar:**
 - **iPhone:** abre <https://nazcar1000rr.github.io/inventario-movil/> en Safari → Compartir → *Añadir a pantalla de inicio*. Si ya la tienes, ábrela con internet y toca *Actualizar ahora*.
 - **Android:** descarga <https://github.com/Nazcar1000rr/inventario-movil/releases/latest/download/inventario-movil.apk> e instálalo (para actualizar, instálalo encima, sin desinstalar).
-- **Al pasar de la v1 a la v2 tus datos se convierten solos.** Igual, haz un respaldo antes de actualizar.
+- **Al actualizar (de la v1 o la v2 a la 2.1) tus datos se convierten solos.** Igual, haz un respaldo antes de actualizar.
 
 > Guía de instalación: **[docs/INSTALACION.md](docs/INSTALACION.md)** · Manual de uso: **[docs/Manual-Inventario-Movil.pdf](docs/Manual-Inventario-Movil.pdf)** (también dentro de la app, en Más → Ayuda)
 > Arquitectura, modelo de datos y fórmulas: **[docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)** · Pruebas y resultados reales: **[docs/PRUEBAS.md](docs/PRUEBAS.md)**
@@ -20,10 +20,11 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 
 | Elemento | Estado |
 |---|---|
-| Código fuente completo (PWA + proyecto Android), versión 2.0.0 | ✅ Terminado |
-| Lógica de negocio y base de datos local | ✅ 64 pruebas automáticas, todas aprobadas |
-| Interfaz | ✅ 17 pruebas de extremo a extremo en Chromium, todas aprobadas |
+| Código fuente completo (PWA + proyecto Android), versión 2.1.0 | ✅ Terminado |
+| Lógica de negocio y base de datos local | ✅ 85 pruebas automáticas, todas aprobadas |
+| Interfaz | ✅ 21 pruebas de extremo a extremo en Chromium, todas aprobadas |
 | Conversión automática de los datos de la v1 | ✅ Probada con una base real de la v1 (en la capa de datos y en el navegador) y con respaldos de la v1 |
+| Conversión automática de los datos de la v2 (lotes) | ✅ Probada con una base real de la v2 y con respaldos de la v2 (en la capa de datos, con el mismo código Dexie de la app) |
 | PWA publicada en HTTPS | ✅ Versión 2.0.0 publicada con GitHub Pages (comprobado que la dirección sirve la compilación nueva). Se republica en cada cambio |
 | APK de Android | ✅ Versión 2.0.0 (compilación 6) compilada y firmada en GitHub Actions y publicada en *Releases*. Comprobado que está firmado con la misma clave que la v1 (se puede instalar encima) |
 | Clave de firma del APK | Entregada **por separado** (no está en el código) |
@@ -34,12 +35,16 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 **Inventario**
 - Inventarios múltiples (crear, renombrar, archivar, eliminar con confirmación escrita) en modo **sencillo** o **profesional** (cambiar de modo no borra nada) y **vistas consolidadas** que suman varios sin duplicar.
 - Productos **por unidad** (teléfonos, con código interno permanente IPH-0001…, IMEI, serial, batería, inspección de 16 puntos, fotos) o **por cantidad** (accesorios, costo promedio ponderado).
+- **Lotes por precio de compra** (accesorios y audífonos): cada compra guarda su precio; al vender sale primero lo más antiguo o el lote que elijas, con su costo y precio mínimo. Se apaga por producto (costo promedio) y se puede volver a prender.
+- **Teléfonos agrupados por compra** ("Compra del 10 oct · 3 disponibles · $X c/u").
 - **Estado del equipo** al ingresarlo, en los dos modos: Nuevo, Usado o Restaurado.
 - **Historial de reparaciones y piezas** por equipo, también en modo sencillo: batería, pantalla, tapa, cámaras, Face ID/Touch ID, puerto, altavoz, chasis, placa u otra; calidad original/genérica/no sé; quién la cambió; aviso de "pieza desconocida". Etiquetas y filtros en las listas. Solo las reparaciones pagadas suman costo.
 - Catálogo de iPhone X a los anunciados en septiembre de 2026, AirPods, y editable (marcas y modelos de Android).
 
 **Compras y ventas**
 - Compras con varios productos, gastos repartidos al peso, IMEI por unidad y **forma de pago**: caja, tarjeta de crédito, crédito del proveedor u otra deuda (total o parcial).
+- **"La última vez pagaste…"** con ▲/▼ y el último precio de cada proveedor; **aviso al comprar más barato** que lo que ya tienes (cuánto más te costó y su precio mínimo).
+- **Gastos del viaje de compras:** agregar un gasto a una compra ya registrada o repartirlo entre las compras del día (lo que sigue en existencia sube de costo; lo ya vendido queda como gasto).
 - Ventas con unidad más antigua o elegida, descuentos, pagos parciales y posteriores, garantía, gastos y entrega. Doble pulsación no duplica.
 - **Ayuda de precio al vender:** costo, precio mínimo, precio de mercado, "tu precio real" (promedio de tus ventas de los últimos 90 días) y precio sugerido; aviso si vendes por debajo del costo o del mínimo.
 - **Comisiones por medio de pago** (por ejemplo, datáfono 3 %): se registran solas como gasto.
@@ -48,6 +53,7 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 **Dinero**
 - **Capital:** valor del negocio, capital aportado (incluida la mercancía que ya tenías), crecimiento, caja calculada y "Cuadrar caja", por inventario o global; gráfica mensual del valor y del crecimiento; "¿Dónde está tu dinero?".
 - **Aportes, retiros, préstamos a ti** (dinero de la inversión que tomas y devuelves) y ajustes de caja.
+- **Gastos personales** (gustos, gastos hormiga): te dice si salen de las ganancias del mes o del capital, con consejos ("la plata del negocio es del negocio") que se pueden apagar.
 - **Deudas y préstamos:** tarjeta de crédito, proveedores, préstamos de terceros, con abonos e intereses (gasto financiero).
 - **Métricas:** rentabilidad del periodo, rotación del inventario, días para recuperar el inventario y dinero dormido. **Metas** con ritmo mensual necesario.
 
@@ -63,6 +69,8 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 
 **Ayuda**
 - Lista de **primeros pasos**, botón **?** en cada pantalla, **ⓘ** en cada número con su fórmula, **manual con buscador** y "Llévame ahí", **modo práctica** con datos de ejemplo en una base aparte, **novedades** después de actualizar y **manual en PDF**.
+- **Recorridos guiados** sobre las pantallas reales y **Aprende de negocios**: 10 lecciones con ejemplos, calculadoras y preguntas. **Consejo del día** en Inicio.
+- **Sonidos** suaves, cada uno se activa o desactiva por separado.
 - Tono cercano (tú) en toda la app.
 
 **Respaldo:** formato propio con suma SHA-256 y **cifrado AES-256 opcional**, menú nativo para compartir, importación verificada en una base temporal, reemplazo atómico y **deshacer**. Los respaldos de la v1 se convierten al importarlos.
@@ -88,13 +96,18 @@ npm run android:apk    # compilar el APK (requiere Android SDK y android/keystor
 ```
 src/core/            Lógica de negocio sin interfaz (reutilizable)
   types.ts           Modelo de datos
-  db.ts              Esquema IndexedDB (Dexie), versiones y migración v1 → v2
+  db.ts              Esquema IndexedDB (Dexie), versiones y migraciones v1 → v2 → v3
+  lots.ts            Lotes: consumo y reconstrucción desde el historial (funciones puras)
   catalog.ts         Catálogo base, puntos de inspección, piezas y estados del equipo
-  services/          Inventarios, productos, compras, ventas, gastos, garantías, vistas,
-                     informes, capital, deudas, precios, rentabilidad, integridad,
-                     respaldo, búsqueda
+  services/          Inventarios, productos, lotes, compras, ventas, gastos, garantías,
+                     vistas, informes, capital, deudas, precios, rentabilidad,
+                     historial de precios de compra, gastos personales,
+                     integridad, respaldo, búsqueda
 src/ui/              Interfaz React (pantallas, componentes, navegación)
-  help/content.ts    Manual, explicaciones de métricas, ayuda por pantalla y novedades
+  help/content.ts    Manual, explicaciones de métricas, ayuda por pantalla, novedades y consejos
+  help/lessons.ts    Lecciones de "Aprende de negocios"
+  tour.tsx           Recorridos guiados
+  sound.ts           Sonidos (Web Audio)
   practice.ts        Datos de ejemplo del modo práctica
   summary-render.ts  Imagen y PDF del resumen mensual
 src/main.tsx         Arranque, service worker y botón Atrás de Android
@@ -116,3 +129,5 @@ docs/                Instalación, arquitectura, pruebas, manual y capturas
 - **No implementado:** escaneo o generación de QR/códigos de barras, impresión de etiquetas, estado "reservado", combinar dos respaldos (la importación siempre reemplaza, con opción de deshacer), convertir un producto de "por cantidad" a "por unidad", y saldo a favor del dueño (cuando el negocio te debe a ti; regístralo como aporte).
 - Los importes de una compra o venta no se editan: se anula y se registra de nuevo para que todo quede trazable.
 - La batería del iPhone se ingresa a mano: la app no la lee del equipo.
+- El avance de los recorridos y las lecciones y las preferencias de sonido se guardan solo en el teléfono (no van en el respaldo). En iPhone, con el teléfono en silencio es posible que los sonidos no suenen.
+- Los lotes son para productos por cantidad; los teléfonos ya guardan el costo de cada unidad.

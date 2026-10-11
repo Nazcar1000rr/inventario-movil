@@ -5,6 +5,7 @@ import { Icon } from '../components/Icon';
 import { Card, confirmAction, Empty, ListItem, Loading, Notice, Page, Sheet, TextInput } from '../components/ui';
 import { ARTICLES, CATEGORIES, CHANGELOG, findArticle, METRICS, searchArticles, type Article, type Block } from '../help/content';
 import { isNative, shareBinary } from '../platform';
+import { ToursCard } from './Learn';
 import { navigate } from '../router';
 import { db, isPracticeMode, practice, PRACTICE_DB, setPracticeMode, setPref, getPref, toast, useLive } from '../store';
 
@@ -67,6 +68,12 @@ export function HelpScreen() {
       ) : (
         <>
           <GettingStartedCard always />
+          <ToursCard />
+          <Card flush>
+            <ul className="list wrap-sub">
+              <ListItem href="/aprende" icon="star" title="Aprende de negocios" sub="10 lecciones cortas: costo, margen, ganancia, caja, capital, precios y más" />
+            </ul>
+          </Card>
           <PracticeCard />
           <Card flush title={<h2 style={{ padding: '0 0 4px' }}>Manual</h2>}>
             <ul className="list wrap-sub">

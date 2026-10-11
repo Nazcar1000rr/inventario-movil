@@ -79,6 +79,9 @@ test('todas las pantallas cargan sin errores (con datos de ejemplo)', async ({ p
   const productId = page.url().split('/productos/')[1];
   await page.getByRole('button', { name: /Vendidas/ }).click();
   const unitId = (await page.locator('a[href^="#/unidades/"]').first().getAttribute('href'))!.split('/unidades/')[1];
+  await page.goto(`/#/inventarios/${inv}`);
+  await page.getByText('Cargador 20 W').click();
+  const accessoryId = page.url().split('/productos/')[1];
   await page.goto('/#/garantias');
   await page.getByRole('button', { name: 'Todas' }).click();
   const warrantyId = (await page.locator('a[href^="#/garantias/"]').first().getAttribute('href'))!.split('/garantias/')[1];
@@ -132,6 +135,24 @@ test('todas las pantallas cargan sin errores (con datos de ejemplo)', async ({ p
     '/ayuda/capital',
     '/ayuda/manual',
     '/ayuda/novedades',
+    // v2.1
+    `/productos/${accessoryId}`,
+    '/gastos/nuevo?tipo=compra',
+    '/gastos/nuevo?tipo=personal',
+    '/personal',
+    '/aprende',
+    '/aprende/costo',
+    '/aprende/margen',
+    '/aprende/ganancia',
+    '/aprende/caja',
+    '/aprende/capital',
+    '/aprende/rotacion',
+    '/aprende/sueldo',
+    '/aprende/precios',
+    '/aprende/proveedores',
+    '/aprende/lotes',
+    '/ayuda/lotes',
+    '/ayuda/gastos-personales',
   ];
   let helpOpened = 0;
   for (const r of routes) {

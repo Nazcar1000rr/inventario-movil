@@ -4,13 +4,19 @@ import {
   createExpense,
   EXPENSE_CATEGORIES,
   formatCOP,
+  formatDate,
   formatDateTime,
   newOpId,
   nowISO,
   TREATMENT_LABEL,
   voidExpense,
+  type AllocationMethod,
   type ExpenseTreatment,
   type ID,
+  addTripCost,
+  fromDateInput,
+  previewPurchaseCost,
+  toDateInput,
   type PaymentStatus,
 } from '../../core';
 import { InventorySelect, PaymentBadge, ScopeSelect, useDefaultInventory, useScope } from '../components/common';
@@ -18,6 +24,8 @@ import { Icon } from '../components/Icon';
 import { Badge, Card, Chips, confirmAction, DateTimeInput, Empty, Field, FormError, KV, Loading, MoneyInput, Notice, Page, Paged, Segmented, TextInput } from '../components/ui';
 import { navigate, useRoute } from '../router';
 import { db, useAction, useLive } from '../store';
+import { CostSplitView, purchasesOfDayView } from '../components/lots';
+import { PersonalSpendingForm } from './Personal';
 
 type Tab = 'ventas' | 'compras' | 'gastos';
 
@@ -170,13 +178,36 @@ function ExpensesList({ ids }: { ids: ID[] | null }) {
       const es = (await d.expenses.orderBy('date').reverse().toArray()).filter((e) => !ids || (e.inventoryId !== null && ids.includes(e.inventoryId)));
       const invs = await d.inventories.toArray();
       const invName = new Map(invs.map((i) => [i.id, i.name]));
-      return es.map((e) => ({ e, inv: e.inventoryId ? invName.get(e.inventoryId) ?? '' : 'General' }));
+      // Un gasto de compra repartido (varias partes) se muestra como uno solo
+      const groups = new Map<string, { total: number; parts: number; purchases: Set<string> }>();
+      for (const e of es)
+        if (e.costGroupId) {
+          const g = groups.get(e.costGroupId) ?? { total: 0, parts: 0, purchases: new Set<string>() };
+          g.total += e.amount;
+          g.parts++;
+          if (e.purchaseId) g.purchases.add(e.purchaseId);
+          groups.set(e.costGroupId, g);
+        }
+      const seen = new Set<string>();
+      const out = [];
+      for (const e of es) {
+        if (e.costGroupId) {
+          if (seen.has(e.costGroupId)) continue;
+          seen.add(e.costGroupId);
+        }
+        const g = e.costGroupId ? groups.get(e.costGroupId)! : null;
+        out.push({ e, inv: e.inventoryId ? invName.get(e.inventoryId) ?? '' : 'General', total: g ? g.total : e.amount, purchases: g ? g.purchases.size : 0 });
+      }
+      return out;
     },
     [JSON.stringify(ids)],
   );
   return (
     <>
       {ids ? <p className="small muted">Se muestran los gastos asignados a estos inventarios. Los gastos generales aparecen en "Todos los inventarios".</p> : null}
+      <a className="small" href="#/personal">
+        Ver tus gastos personales (gustos, gastos hormiga…) →
+      </a>
       <Card flush>
         {!data ? (
           <Loading />
@@ -184,9 +215,9 @@ function ExpensesList({ ids }: { ids: ID[] | null }) {
           <Paged
             items={data}
             empty={<Empty icon="receipt" title="No hay gastos" />}
-            render={({ e, inv }) => (
+            render={({ e, inv, total, purchases }) => (
               <li key={e.id}>
-                <a className="item" href={`#/gastos/${e.id}`}>
+                <a className="item" href={e.costGroupId && e.purchaseId ? `#/compras/${e.purchaseId}` : `#/gastos/${e.id}`}>
                   <span className="item-main">
                     <span className="item-title" style={{ display: 'block' }}>
                       {e.category}
@@ -194,11 +225,11 @@ function ExpensesList({ ids }: { ids: ID[] | null }) {
                     </span>
                     <span className="item-sub" style={{ display: 'block' }}>
                       {formatDateTime(e.date)} · {inv}
-                      {e.treatment === 'capitalized' ? ' · al costo' : ''}
+                      {e.costGroupId ? (purchases > 1 ? ` · repartido entre ${purchases} compras` : ' · gasto de una compra') : e.treatment === 'capitalized' ? ' · al costo' : ''}
                     </span>
                   </span>
                   <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
-                    <span className="money strong">{formatCOP(e.amount)}</span>
+                    <span className="money strong">{formatCOP(total)}</span>
                     {e.status === 'voided' ? <Badge>⊘ Anulado</Badge> : null}
                   </span>
                 </a>
@@ -211,7 +242,40 @@ function ExpensesList({ ids }: { ids: ID[] | null }) {
   );
 }
 
-export function ExpenseFormScreen({ inventoryId }: { inventoryId: string | null }) {
+type ExpenseKind = 'negocio' | 'compra' | 'personal';
+
+export function ExpenseFormScreen({ inventoryId, kind: initialKind }: { inventoryId: string | null; kind?: string | null }) {
+  const [kind, setKind] = useState<ExpenseKind>(initialKind === 'compra' || initialKind === 'personal' ? initialKind : 'negocio');
+  const title = kind === 'personal' ? 'Gasto personal' : kind === 'compra' ? 'Gasto de compra o viaje' : 'Registrar gasto';
+  return (
+    <Page title={title} help={kind === 'personal' ? 'personal' : 'expense-form'} back="/operaciones?tab=gastos">
+      <Field label="¿De quién es este gasto?">
+        <div className="choice-cards" role="group" aria-label="Tipo de gasto">
+          {(
+            [
+              ['negocio', 'receipt', 'Del negocio', 'Publicidad, empaques, arriendo… Resta de la ganancia.'],
+              ['compra', 'cart', 'De una compra o viaje', 'Pasajes, transporte, comida del viaje. Se suma al costo de la mercancía.'],
+              ['personal', 'wallet', 'Personal (para ti)', 'Un gusto, un gasto hormiga… Sale de tus ganancias o del capital.'],
+            ] as [ExpenseKind, string, string, string][]
+          ).map(([k, icon, label, hint]) => (
+            <button key={k} type="button" className="choice-card" aria-pressed={kind === k} onClick={() => setKind(k)} data-testid={`expense-kind-${k}`}>
+              <Icon name={icon} />
+              <span>
+                <span className="strong" style={{ display: 'block' }}>
+                  {label}
+                </span>
+                <span className="tiny muted">{hint}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </Field>
+      {kind === 'personal' ? <PersonalSpendingForm /> : kind === 'compra' ? <TripCostForm /> : <BusinessExpenseForm inventoryId={inventoryId} />}
+    </Page>
+  );
+}
+
+function BusinessExpenseForm({ inventoryId }: { inventoryId: string | null }) {
   const [inv, setInv, invs] = useDefaultInventory(inventoryId);
   const [general, setGeneral] = useState(!inventoryId);
   const [amount, setAmount] = useState<number | null>(null);
@@ -222,9 +286,9 @@ export function ExpenseFormScreen({ inventoryId }: { inventoryId: string | null 
   const [opId, setOpId] = useState(newOpId);
   const act = useAction();
   return (
-    <Page title="Registrar gasto" help="expense-form" back="/operaciones?tab=gastos">
+    <>
       <Notice>
-        Gastos generales del negocio (se restan en la ganancia neta). Para sumar un costo a una unidad concreta (reparación, transporte de ese equipo), hágalo desde la ficha de la unidad: así no se resta dos veces.
+        Gastos generales del negocio (se restan en la ganancia neta). Para sumar un costo a un equipo concreto (reparación, transporte de ese equipo), hazlo desde la ficha del equipo: así no se resta dos veces.
       </Notice>
       <form
         className="stack"
@@ -268,7 +332,103 @@ export function ExpenseFormScreen({ inventoryId }: { inventoryId: string | null 
           Guardar gasto
         </button>
       </form>
-    </Page>
+    </>
+  );
+}
+
+const TRIP_CATEGORIES = ['Transporte', 'Pasajes', 'Comida del viaje', 'Envío', 'Parqueadero', 'Otros'];
+
+/** Un gasto del viaje de compras repartido entre las compras del día. */
+function TripCostForm() {
+  const [day, setDay] = useState(toDateInput(nowISO()));
+  const [amount, setAmount] = useState<number | null>(null);
+  const [category, setCategory] = useState('Pasajes');
+  const [notes, setNotes] = useState('');
+  const [allocation, setAllocation] = useState<AllocationMethod>('value');
+  const [excluded, setExcluded] = useState<string[]>([]);
+  const [opId] = useState(newOpId);
+  const act = useAction();
+  const dayIso = fromDateInput(day);
+  const list = useLive(async (d) => (dayIso ? purchasesOfDayView(d, dayIso) : []), [dayIso]);
+  const lastDay = useLive(async (d) => {
+    const all = (await d.purchases.orderBy('date').reverse().toArray()).find((p) => p.status === 'active');
+    return all ? all.date : null;
+  });
+  const selected = (list ?? []).map((x) => x.p.id).filter((id) => !excluded.includes(id));
+  const preview = useLive(
+    async (d) => ((amount ?? 0) > 0 && selected.length ? previewPurchaseCost(d, selected, amount!, allocation).catch(() => null) : null),
+    [amount, allocation, selected.join(',')],
+  );
+  return (
+    <form
+      className="stack"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const r = await act.run(() => addTripCost(db, selected, { opId, date: !dayIso || day === toDateInput(nowISO()) ? nowISO() : new Date(new Date(dayIso).getTime() + 6 * 3_600_000).toISOString(), amount: amount ?? 0, category, notes, allocation }), 'Gasto agregado a las compras');
+        if (r) navigate(`/compras/${selected[0]}`, { replace: true });
+      }}
+    >
+      <Notice>
+        Lo que gastaste para ir a comprar mercancía (pasajes, transporte, comida del viaje) es parte del costo. Se reparte entre las compras del día: lo que sigue en tu inventario sube de costo y lo que ya vendiste queda como gasto.
+      </Notice>
+      <Field label="Día de las compras" htmlFor="tc-day">
+        <input id="tc-day" type="date" className="input" value={day} max={toDateInput(nowISO())} onChange={(e) => { setDay(e.target.value); setExcluded([]); }} />
+      </Field>
+      {!list ? null : list.length === 0 ? (
+        <Empty icon="cart" title="No hay compras registradas ese día">
+          <p className="small muted">Primero registra las compras del viaje y después agrega aquí el gasto. También puedes agregarlo desde el detalle de una compra.</p>
+          <div className="row wrap" style={{ justifyContent: 'center' }}>
+            {lastDay && toDateInput(lastDay) !== day ? (
+              <button type="button" className="btn" onClick={() => { setDay(toDateInput(lastDay)); setExcluded([]); }}>
+                Ir al {formatDate(lastDay)} (tu última compra)
+              </button>
+            ) : null}
+            <a className="btn" href="#/compras/nueva">
+              Registrar compra
+            </a>
+          </div>
+        </Empty>
+      ) : (
+        <>
+          <Field label="¿Entre qué compras se reparte?">
+            <div className="stack-sm">
+              {list.map(({ p, supplier, items }) => (
+                <label key={p.id} className="check">
+                  <input type="checkbox" checked={!excluded.includes(p.id)} onChange={() => setExcluded((x) => (x.includes(p.id) ? x.filter((y) => y !== p.id) : [...x, p.id]))} /> {formatDateTime(p.date)} · {formatCOP(p.subtotal)}
+                  {supplier ? ` · ${supplier}` : ''}
+                  {items ? ` · ${items}` : ''}
+                </label>
+              ))}
+            </div>
+          </Field>
+          <div className="grid-2">
+            <Field label="Valor" htmlFor="tc-amount" error={act.field === 'amount' ? act.error : null}>
+              <MoneyInput id="tc-amount" value={amount} onChange={setAmount} invalid={act.field === 'amount'} />
+            </Field>
+            <Field label="¿Qué fue?" htmlFor="tc-cat">
+              <select id="tc-cat" className="select" value={category} onChange={(e) => setCategory(e.target.value)}>
+                {TRIP_CATEGORIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <Field label="Nota (opcional)" htmlFor="tc-notes">
+            <TextInput id="tc-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej.: bus ida y vuelta + almuerzo" />
+          </Field>
+          {selected.length > 1 ? (
+            <Field label="Repartir">
+              <Segmented label="Repartir" value={allocation} onChange={setAllocation} options={[['value', 'Según lo pagado'], ['units', 'Igual por unidad']]} />
+            </Field>
+          ) : null}
+          {preview ? <CostSplitView split={preview} /> : null}
+          <FormError error={act.field === 'amount' ? null : act.error} />
+          <button className="btn primary block" disabled={act.busy || !selected.length} data-testid="save-trip-cost">
+            Agregar a {selected.length} {selected.length === 1 ? 'compra' : 'compras'}
+          </button>
+        </>
+      )}
+    </form>
   );
 }
 

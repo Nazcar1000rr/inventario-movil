@@ -4,6 +4,7 @@ import { normalizeCondition } from '../catalog';
 import { assertDate, cleanStr, daysBetween, fail, newId, normalizeText, nowISO } from '../util';
 import { getSettings, logHistory } from './base';
 import { unitCost } from './stock';
+import { lotOrder } from '../lots';
 
 /**
  * PRECIOS (v2)
@@ -200,6 +201,21 @@ export interface PricingInfo {
   suggestedSource: 'market' | 'recent' | 'list' | 'market_stale' | 'min' | null;
   /** El sugerido se subió al mínimo porque la referencia estaba por debajo. */
   raisedToMin: boolean;
+  /** Productos con lotes: costo y precio mínimo de cada lote (del que sale primero al último). */
+  lots?: LotPricing[];
+  /** Productos con lotes: costo promedio de todas las existencias (para comparar). */
+  avgCost?: Money | null;
+}
+
+export interface LotPricing {
+  lotId: ID;
+  qty: number;
+  date: ISODate | null;
+  unitCost: Money | null;
+  minPrice: Money | null;
+  supplierId: ID | null;
+  /** true = es el lote que sale primero si no eliges otro. */
+  next: boolean;
 }
 
 export const SUGGESTED_SOURCE_LABEL: Record<NonNullable<PricingInfo['suggestedSource']>, string> = {
@@ -288,12 +304,24 @@ export async function getUnitPricing(db: AppDB, unitId: ID, now = new Date()): P
 }
 
 /** Datos de precio para productos por cantidad (accesorios). */
-export async function getProductPricing(db: AppDB, productId: ID, now = new Date()): Promise<PricingInfo> {
+export async function getProductPricing(db: AppDB, productId: ID, now = new Date(), lotId?: ID | null): Promise<PricingInfo> {
   const p = await db.products.get(productId);
   if (!p) fail('not_found', 'El producto no existe.');
   const settings = await getSettings(db);
   const knownQty = p.qty - p.unknownCostQty;
-  const cost = p.tracking === 'quantity' && knownQty > 0 ? Math.round(p.stockValue / knownQty) : null;
+  const avgCost = p.tracking === 'quantity' && knownQty > 0 ? Math.round(p.stockValue / knownQty) : null;
+  let cost = avgCost;
+  let lots: LotPricing[] | undefined;
+  if (p.tracking === 'quantity' && p.costing === 'lots') {
+    const all = (await db.lots.where('productId').equals(p.id).toArray()).filter((l) => l.qty > 0).sort(lotOrder);
+    lots = all.map((l, i) => {
+      const uc = l.costKnown ? Math.round(l.value / l.qty) : null;
+      return { lotId: l.id, qty: l.qty, date: l.date, unitCost: uc, minPrice: minPriceFor(uc, settings.pricing), supplierId: l.supplierId, next: i === 0 };
+    });
+    // El costo de referencia es el del lote elegido o el del que sale primero
+    const chosen = (lotId && lots.find((l) => l.lotId === lotId)) || lots[0];
+    if (chosen) cost = chosen.unitCost;
+  }
   const refs = await recentSalesFor(db, (pp) => pp.id === p.id, settings.pricing.recentSalesDays, now);
   const recent = refs.length ? { avg: Math.round(refs.reduce((a, r) => a + r.amount, 0) / refs.length), count: refs.length, days: settings.pricing.recentSalesDays } : null;
   const base = {
@@ -307,7 +335,7 @@ export async function getProductPricing(db: AppDB, productId: ID, now = new Date
     recent,
     listPrice: p.salePrice,
   };
-  return { ...base, ...pickSuggested(base) };
+  return { ...base, ...pickSuggested(base), ...(lots ? { lots, avgCost } : {}) };
 }
 
 export interface PriceCheck {

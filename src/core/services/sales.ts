@@ -17,6 +17,7 @@ import { allocate, assertDate, assertMoney, assertQty, cleanStr, fail, newId, no
 import { addMovement, getSettings, logHistory, requireInventory, requireProduct } from './base';
 import { claimOp, consumeQuantity, fifoOrder, tx, unitCost } from './stock';
 import { buildWarranty } from './warranties';
+import { addLot, consumeLots, restoreLineWithoutLots, restoreTakes, usesLots } from './lots';
 
 export interface SaleLineInput {
   productId: ID;
@@ -26,6 +27,8 @@ export interface SaleLineInput {
   unitIds?: ID[];
   /** Precio de venta por unidad. */
   unitPrice: Money;
+  /** Productos con lotes: lote del que sale primero (por defecto, el más antiguo). */
+  lotId?: ID | null;
 }
 
 export interface SaleCostInput {
@@ -113,6 +116,7 @@ interface Atom {
   unit: Unit | null;
   quantity: number;
   unitPrice: Money;
+  lotId?: ID | null;
 }
 
 export type PaymentStatus = 'pagada' | 'parcial' | 'pendiente' | 'devuelta' | 'anulada';
@@ -239,7 +243,7 @@ export async function createSale(db: AppDB, input: SaleInput): Promise<Sale> {
         if (q > state.qty)
           fail('insufficient_stock', `Stock insuficiente de "${p.name}": hay ${state.qty} disponible(s) y se intentan vender ${q}.`, `lines.${i}.quantity`);
         qtyState.set(p.id, { ...state, qty: state.qty - q });
-        atoms.push({ product: p, unit: null, quantity: q, unitPrice: l.unitPrice });
+        atoms.push({ product: p, unit: null, quantity: q, unitPrice: l.unitPrice, lotId: l.lotId ?? null });
       }
     }
 
@@ -325,7 +329,12 @@ export async function createSale(db: AppDB, input: SaleInput): Promise<Sale> {
         });
       } else {
         const p = (await db.products.get(a.product.id))!;
-        const c = consumeQuantity(p, a.quantity);
+        let c: { cogs: Money; unknownQty: number; qty: number; stockValue: Money; unknownCostQty: number };
+        if (usesLots(p)) {
+          const r = await consumeLots(db, p, a.quantity, a.lotId);
+          line.lotAllocations = r.takes;
+          c = { cogs: r.cogs, unknownQty: r.unknownQty, qty: p.qty - a.quantity, stockValue: p.stockValue - r.cogs, unknownCostQty: p.unknownCostQty - r.unknownQty };
+        } else c = consumeQuantity(p, a.quantity);
         line.cogs = c.cogs;
         line.cogsUnknownQty = c.unknownQty;
         await db.products.update(p.id, { qty: c.qty, stockValue: c.stockValue, unknownCostQty: c.unknownCostQty, updatedAt: nowISO() });
@@ -606,6 +615,11 @@ export async function registerReturn(db: AppDB, input: ReturnInput): Promise<Sal
           unknownCostQty: fresh.unknownCostQty + portion.unknownQty,
           updatedAt: nowISO(),
         });
+        if (usesLots(fresh) && rl.destination !== 'damaged') {
+          const note = `Devolución: ${cleanStr(input.reason, 120)}`;
+          if (portion.unknownQty > 0) await addLot(db, { product: fresh, source: 'return', qty: portion.unknownQty, value: null, date, notes: note });
+          if (q - portion.unknownQty > 0) await addLot(db, { product: fresh, source: 'return', qty: q - portion.unknownQty, value: portion.cogs, date, notes: note });
+        }
         await addMovement(db, {
           at: date,
           inventoryId: sale.inventoryId,
@@ -735,6 +749,10 @@ export async function voidSale(db: AppDB, saleId: ID, reason: string, opts: { vo
           unknownCostQty: p.unknownCostQty + l.cogsUnknownQty,
           updatedAt: now,
         });
+        if (usesLots(p)) {
+          if (l.lotAllocations?.length) await restoreTakes(db, p, l.lotAllocations, now);
+          else await restoreLineWithoutLots(db, p, l, now);
+        }
         await addMovement(db, {
           at: now,
           inventoryId: sale.inventoryId,

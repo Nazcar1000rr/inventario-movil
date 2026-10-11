@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { formatCOP, formatInt, fromLocalInput, parseMoney, toLocalInput } from '../../core';
 import { goBack } from '../router';
 import { pushModal, useToasts } from '../store';
+import { playSound } from '../sound';
 import { HelpButton } from './help';
 import { Icon } from './Icon';
 
@@ -49,9 +50,9 @@ export function Page({
   );
 }
 
-export function Card({ title, action, children, flush }: { title?: ReactNode; action?: ReactNode; children: ReactNode; flush?: boolean }) {
+export function Card({ title, action, children, flush, tour }: { title?: ReactNode; action?: ReactNode; children: ReactNode; flush?: boolean; tour?: string }) {
   return (
-    <section className={`card${flush ? ' flush' : ''}`}>
+    <section className={`card${flush ? ' flush' : ''}`} data-tour={tour}>
       {title || action ? (
         <div className="card-title" style={flush ? { padding: '14px 14px 0' } : undefined}>
           {typeof title === 'string' ? <h2>{title}</h2> : title}
@@ -205,9 +206,9 @@ export function Paged<T>({ items, render, pageSize = 40, empty }: { items: T[]; 
 
 /* ================= Formularios ================= */
 
-export function Field({ label, hint, error, children, htmlFor }: { label: ReactNode; hint?: ReactNode; error?: string | null; children: ReactNode; htmlFor?: string }) {
+export function Field({ label, hint, error, children, htmlFor, tour }: { label: ReactNode; hint?: ReactNode; error?: string | null; children: ReactNode; htmlFor?: string; tour?: string }) {
   return (
-    <div className="field">
+    <div className="field" data-tour={tour}>
       <label htmlFor={htmlFor}>{label}</label>
       {children}
       {error ? (
@@ -376,6 +377,7 @@ export function Sheet({
   const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const unregister = pushModal(() => closeRef.current());
+    playSound('open');
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const prevFocus = document.activeElement as HTMLElement | null;

@@ -24,7 +24,7 @@ export interface IntegrityReport {
 export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
   const issues: string[] = [];
   const warnings: string[] = [];
-  const [inventories, products, units, purchases, pLines, sales, sLines, payments, returns, expenses, movements, warranties, claims, repairs, photos, views, suppliers, customers, capital, debts, debtPayments, goals] =
+  const [inventories, products, units, purchases, pLines, sales, sLines, payments, returns, expenses, movements, warranties, claims, repairs, photos, views, suppliers, customers, capital, debts, debtPayments, goals, lots] =
     await Promise.all([
       db.inventories.toArray(),
       db.products.toArray(),
@@ -48,6 +48,7 @@ export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
       db.debts.toArray(),
       db.debtPayments.toArray(),
       db.goals.toArray(),
+      db.lots.toArray(),
     ]);
   const invIds = new Set(inventories.map((i) => i.id));
   const prodById = new Map(products.map((p) => [p.id, p]));
@@ -95,6 +96,40 @@ export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
     ref(p.unknownCostQty === a.u, `Producto ${p.name}: sin costo ${p.unknownCostQty} ≠ movimientos ${a.u}`);
     ref(p.qty >= 0 && p.stockValue >= 0 && p.unknownCostQty >= 0 && p.unknownCostQty <= p.qty, `Producto ${p.name}: existencias negativas o incoherentes`);
   }
+
+  // Lotes (v2.1): los totales del producto = suma de sus lotes
+  const lotAgg = new Map<ID, { q: number; v: number; u: number }>();
+  const lotIds = new Set(lots.map((l) => l.id));
+  for (const l of lots) {
+    const p = prodById.get(l.productId);
+    ref(!!p, `Lote ${l.id}: producto inexistente`);
+    if (p) {
+      ref(p.tracking === 'quantity' && p.costing === 'lots', `Lote de ${p.name}: el producto no usa lotes`);
+      ref(p.inventoryId === l.inventoryId, `Lote de ${p.name}: inventario distinto al de su producto`);
+    }
+    ref(Number.isInteger(l.qty) && Number.isInteger(l.value) && l.qty >= 0 && l.value >= 0, `Lote ${l.id}: valores negativos o inválidos`);
+    if (!l.costKnown) ref(l.value === 0, `Lote ${l.id}: sin costo pero con valor`);
+    if (l.qty === 0 && l.costKnown) ref(l.value === 0, `Lote ${l.id}: sin existencias pero con valor`);
+    if (l.purchaseId) ref(purchaseById.has(l.purchaseId), `Lote ${l.id}: compra inexistente`);
+    if (l.supplierId) ref(supplierIds.has(l.supplierId), `Lote ${l.id}: proveedor inexistente`);
+    const a = lotAgg.get(l.productId) ?? { q: 0, v: 0, u: 0 };
+    a.q += l.qty;
+    a.v += l.costKnown ? l.value : 0;
+    a.u += l.costKnown ? 0 : l.qty;
+    lotAgg.set(l.productId, a);
+  }
+  for (const p of products) {
+    ref(p.costing === 'average' || p.costing === 'lots', `Producto ${p.name}: tipo de costo inválido`);
+    if (p.tracking !== 'quantity' || p.costing !== 'lots') continue;
+    const a = lotAgg.get(p.id) ?? { q: 0, v: 0, u: 0 };
+    ref(a.q === p.qty, `Producto ${p.name}: existencias ${p.qty} ≠ lotes ${a.q}`);
+    ref(a.v === p.stockValue, `Producto ${p.name}: valor ${p.stockValue} ≠ lotes ${a.v}`);
+    ref(a.u === p.unknownCostQty, `Producto ${p.name}: sin costo ${p.unknownCostQty} ≠ lotes ${a.u}`);
+  }
+  for (const l of sLines)
+    for (const t of l.lotAllocations ?? []) ref(t.qty > 0 && t.cogs >= 0, `Línea de venta ${l.id}: reparto por lotes inválido`);
+  for (const e of expenses)
+    for (const a of e.lotAllocations ?? []) if (e.status === 'active') ref(lotIds.has(a.lotId), `Gasto ${e.id}: lote inexistente`);
 
   // Costos capitalizados activos por unidad (reparaciones, costos sumados)
   const capByUnit = new Map<ID, number>();

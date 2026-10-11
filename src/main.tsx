@@ -7,6 +7,7 @@ import { db, closeTopModal, practice } from './ui/store';
 import { seedPracticeData } from './ui/practice';
 import { goBack, canGoBack, currentPath } from './ui/router';
 import { isNative, requestPersistence } from './ui/platform';
+import { installSoundHandlers, recentSounds } from './ui/sound';
 import './ui/styles.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -68,6 +69,9 @@ async function start() {
     void registerSW();
   }
 
+  installSoundHandlers();
+  // Solo para las pruebas automáticas (navegador controlado): nombres de los últimos sonidos
+  if (navigator.webdriver) (window as unknown as { __sounds: string[] }).__sounds = recentSounds;
   root.render(
     <StrictMode>
       <App />

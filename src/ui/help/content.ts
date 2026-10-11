@@ -119,10 +119,10 @@ export const ARTICLES: Article[] = [
     id: 'productos',
     title: 'Productos por unidad y por cantidad',
     category: 'Inventario',
-    keywords: 'producto unidad cantidad catálogo modelo iphone accesorio costo promedio código interno',
-    summary: 'Teléfonos uno por uno; accesorios por cantidad con costo promedio.',
+    keywords: 'producto unidad cantidad catálogo modelo iphone accesorio costo promedio código interno lotes',
+    summary: 'Teléfonos uno por uno; accesorios por cantidad, separados por precio de compra (lotes).',
     blocks: [
-      { list: ['Por unidad (teléfonos): cada equipo tiene su código interno permanente (IPH-0001…), su costo, su estado y su historia.', 'Por cantidad (accesorios): se maneja el total con costo promedio ponderado.'] },
+      { list: ['Por unidad (teléfonos): cada equipo tiene su código interno permanente (IPH-0001…), su costo, su estado y su historia. En la ficha del producto puedes verlos "Por compra".', 'Por cantidad (accesorios): se maneja el total. Cada compra queda en su propio lote con su precio (lo puedes cambiar a costo promedio en la ficha del producto).'] },
       { p: 'Al crear un teléfono puedes elegir el modelo del catálogo (iPhone X hasta los últimos), que ya trae sus capacidades.' },
       { tip: 'Los códigos internos nunca se reutilizan, aunque borres o vendas el equipo.' },
     ],
@@ -167,6 +167,8 @@ export const ARTICLES: Article[] = [
     blocks: [
       { steps: ['Elige el inventario y agrega los productos con la cantidad y el total pagado por cada línea.', 'Si hubo gastos de la compra (transporte, envío), escríbelos: se reparten al costo de lo comprado.', 'Para cada teléfono indica el estado: Nuevo, Usado o Restaurado. En modo profesional también IMEI y serial.', 'Si sabes que el equipo tiene piezas cambiadas, agrégalas en "Reparaciones y piezas".', 'Elige cómo la pagaste: con la caja, con tarjeta de crédito, a crédito del proveedor u otra deuda.', 'Revisa el resumen y confirma.'] },
       { p: 'Si la pagaste con tarjeta o a crédito, la app crea la deuda automáticamente. Puedes financiar solo una parte (por ejemplo, la mitad de contado y la mitad a crédito).' },
+      { p: 'Al elegir el producto verás cuánto pagaste la última vez (y a quién), si ahora te sale más barato o más caro, y un aviso si compras más barato que lo que ya tienes.' },
+      { p: '¿Se te olvidó el transporte? En el detalle de la compra toca "Agregar gasto a esta compra". Si hiciste varias compras en el mismo viaje, puedes repartirlo entre todas.' },
       { tip: 'Los importes de una compra no se editan. Si te equivocaste, anúlala y regístrala de nuevo: así todo queda trazable.' },
     ],
   },
@@ -209,14 +211,22 @@ export const ARTICLES: Article[] = [
   },
   {
     id: 'gastos',
-    title: 'Gastos: operativos y capitalizados',
+    title: 'Gastos: del negocio, de compras y personales',
     category: 'Compras y ventas',
-    keywords: 'gasto transporte publicidad arriendo reparación capitalizado operativo costo',
-    summary: 'Qué gasto resta de la ganancia y cuál se suma al costo del equipo.',
+    keywords: 'gasto transporte publicidad arriendo reparación capitalizado operativo costo personal viaje pasajes',
+    summary: 'Qué gasto resta de la ganancia, cuál se suma al costo y cuál es plata que sacas para ti.',
     to: '/gastos/nuevo',
     toLabel: 'Registrar gasto',
     blocks: [
-      { list: ['Operativo: publicidad, arriendo, transporte general… Se resta de la ganancia del periodo.', 'Capitalizado: un gasto que se suma al costo de un equipo o producto en existencia (por ejemplo, una reparación antes de venderlo). Se vuelve costo cuando lo vendes y no se resta dos veces.'] },
+      { p: 'Al registrar un gasto, primero eliges de quién es:' },
+      {
+        list: [
+          'Del negocio (operativo): publicidad, arriendo, empaques… Se resta de la ganancia del periodo.',
+          'De una compra o viaje: pasajes, transporte, comida del viaje para ir a comprar mercancía. Se suma al costo de lo que compraste (lo ya vendido queda como gasto).',
+          'Personal (para ti): un gusto o un gasto hormiga pagado con plata del negocio. No es un gasto del negocio: es plata que sacas. La app te dice si sale de tus ganancias o del capital.',
+        ],
+      },
+      { p: 'Capitalizado: un gasto que se suma al costo de un equipo o producto en existencia (por ejemplo, una reparación antes de venderlo). Se vuelve costo cuando lo vendes y no se resta dos veces.' },
       { p: 'Los gastos sin inventario son "generales": cuentan en la vista de todos los inventarios, pero no al filtrar uno solo.' },
     ],
   },
@@ -232,6 +242,116 @@ export const ARTICLES: Article[] = [
       { p: 'En Configuración → Comisiones por medio de pago escribe el porcentaje de cada medio (por ejemplo, Tarjeta 3,5 %).' },
       { p: 'Cada vez que registras un pago con ese medio, la app crea un gasto "Comisión medio de pago" con el valor calculado. Antes de confirmar puedes cambiarlo o ponerlo en 0.' },
       { tip: 'Comisión = pago × porcentaje ÷ 100, redondeada al peso.' },
+    ],
+  },
+
+  {
+    id: 'lotes',
+    title: 'Lotes: separar por precio de compra',
+    category: 'Inventario',
+    keywords: 'lote lotes precio antiguo nuevo más barato costo promedio fifo audífonos proveedor bajó',
+    summary: 'Cada compra guarda su precio. Al vender sale primero lo más antiguo, con su costo real.',
+    blocks: [
+      { p: 'Si compras el mismo producto a precios distintos (por ejemplo, audífonos a 30 000 y luego a 22 000), la app guarda cada compra en un lote con su precio.' },
+      {
+        list: [
+          'Al vender, sale primero el lote más antiguo. Si quieres, eliges otro lote en la venta.',
+          'Al vender ves el costo y el precio mínimo de cada lote, para no vender las unidades caras por debajo de su costo.',
+          'En la ficha del producto, la tarjeta "Por precio de compra" muestra cada lote: cantidad, costo por unidad, fecha y proveedor.',
+          'Los ajustes (pérdidas, daños) también pueden salir de un lote elegido.',
+          'Los informes de antigüedad usan la fecha de cada lote.',
+        ],
+      },
+      { p: 'Los lotes vienen prendidos para productos por cantidad. Para usar costo promedio en un producto, apaga "Separar por precio de compra" en su ficha; puedes volver a prenderlo cuando quieras y la app reconstruye los lotes con tu historial, sin cambiar el valor total.' },
+      { p: 'En Configuración → Inventario y consejos decides si los productos nuevos empiezan con lotes o con costo promedio.' },
+      { tip: 'Los teléfonos ya guardan el costo de cada unidad, así que no necesitan lotes. Para verlos agrupados, en la ficha del producto elige "Por compra".' },
+    ],
+  },
+  {
+    id: 'precio-compra',
+    title: 'Lo que has pagado y aviso de compra más barata',
+    category: 'Compras y ventas',
+    keywords: 'última vez pagaste historial precio compra proveedor más barato más caro subió bajó negociar',
+    summary: 'La app recuerda lo que pagas y te avisa si ahora compras más barato que lo que ya tienes.',
+    to: '/compras/nueva',
+    toLabel: 'Registrar compra',
+    blocks: [
+      { p: 'Al registrar una compra, debajo del precio verás: "La última vez pagaste X a [proveedor] el [fecha]", con ▼ si ahora es más barato o ▲ si es más caro.' },
+      { p: 'Si compras más barato que lo que ya tienes, la app te avisa cuánto más te costaron las unidades anteriores y su precio mínimo, para que no las rebajes por debajo de su costo.' },
+      { p: 'En la ficha de cada producto, "Lo que has pagado" muestra tus últimas compras y el último precio de cada proveedor (el más barato con ⭐). Cuenta las compras de todos tus inventarios con el mismo producto.' },
+      { tip: 'Úsalo para negociar: "La última vez me lo dejaste en…".' },
+    ],
+  },
+  {
+    id: 'gasto-compra',
+    title: 'Gastos del viaje de compras',
+    category: 'Compras y ventas',
+    keywords: 'transporte pasajes comida viaje compra agregar gasto después repartir varias compras mismo día costo',
+    summary: 'Agrega el transporte a una compra ya registrada o repártelo entre las compras del día.',
+    to: '/gastos/nuevo?tipo=compra',
+    toLabel: 'Gasto del viaje de compras',
+    blocks: [
+      { p: 'Lo que gastas para ir a comprar mercancía (pasajes, transporte, comida del viaje) es parte del costo de esa mercancía.' },
+      {
+        steps: [
+          'Registra las compras del día como siempre.',
+          'Luego ve a Registrar gasto → "De una compra o viaje" (o al detalle de una compra → "Agregar gasto a esta compra").',
+          'Marca las compras entre las que se reparte y elige si se reparte según lo pagado o igual por unidad.',
+          'Revisa la vista previa y confirma.',
+        ],
+      },
+      { p: 'Lo que sigue en tu inventario sube de costo. La parte que corresponde a lo que ya vendiste se registra como gasto (esas ventas ya se cerraron con su costo).' },
+      { tip: 'Para anularlo, en el detalle de la compra, "Gastos agregados después" → Anular. Si se repartió entre varias compras, se anula completo.' },
+    ],
+  },
+  {
+    id: 'gastos-personales',
+    title: 'Gastos personales: la plata del negocio es del negocio',
+    category: 'Dinero y capital',
+    keywords: 'gasto personal gusto hormiga antojo retiro préstamo sueldo dueño capital ganancias',
+    summary: 'Registra los gustos que pagas con plata del negocio y mira si salen de tus ganancias o del capital.',
+    to: '/personal',
+    toLabel: 'Gastos personales',
+    blocks: [
+      { p: 'Un gusto, un antojo o un gasto hormiga pagado con plata del negocio no es un gasto del negocio: es plata que sacas para ti. Por eso no baja la ganancia, pero sí la caja.' },
+      { p: 'Al registrarlo (Registrar gasto → Personal) eliges en qué fue y si lo vas a devolver: si no, queda como retiro; si sí, como préstamo a ti.' },
+      {
+        list: [
+          'Verde: sale de las ganancias del mes y todavía te queda ganancia sin tocar.',
+          'Amarillo: ya vas en más de la mitad de la ganancia del mes.',
+          'Rojo: ya sacaste más de lo que ganó el negocio en el mes: te estás comiendo el capital (la plata para comprar mercancía).',
+        ],
+      },
+      { p: 'En Gastos personales ves el mes: ganancia, lo que has sacado, en qué se te va y una calculadora de gasto hormiga.' },
+      { tip: 'Págate un sueldo fijo al mes y date los gustos de ahí. Los consejos se pueden apagar en Configuración.' },
+    ],
+  },
+  {
+    id: 'recorridos',
+    title: 'Recorridos guiados y lecciones',
+    category: 'Primeros pasos',
+    keywords: 'recorrido tour guía tutorial interactivo lecciones aprender negocio curso preguntas',
+    summary: 'Recorridos sobre las pantallas reales y lecciones cortas de negocios con preguntas.',
+    to: '/aprende',
+    toLabel: 'Aprende de negocios',
+    blocks: [
+      { p: 'Los recorridos guiados resaltan partes reales de la app y te explican para qué sirven, paso a paso: Conoce la app, Tu primera compra, Tu primera venta y Entiende tu capital. Los encuentras en Ayuda y en Aprende de negocios.' },
+      { p: '"Aprende de negocios" tiene 10 lecciones cortas: costo y precio, margen, ganancia bruta y neta, caja, capital, rotación, gastos hormiga y sueldo, precios, proveedores y lotes. Cada una trae un ejemplo, una calculadora para probar con tus números y 3 preguntas.' },
+      { tip: 'Tu avance se guarda en este teléfono.' },
+    ],
+  },
+  {
+    id: 'sonidos',
+    title: 'Sonidos',
+    category: 'Configuración',
+    keywords: 'sonido sonidos audio volumen silencio clic venta',
+    summary: 'Activa o desactiva cada sonido por separado y ajusta el volumen.',
+    to: '/ajustes',
+    toLabel: 'Ir a Configuración',
+    blocks: [
+      { p: 'La app hace sonidos suaves al tocar botones, cambiar de sección, abrir ventanas, guardar, registrar una venta o una compra, cuando hay un error y al completar logros.' },
+      { p: 'En Configuración → Sonidos activas o desactivas cada uno por separado (toca ▶ para escucharlo) y ajustas el volumen. Se guarda al instante, solo en este teléfono.' },
+      { tip: 'En iPhone, si el teléfono está en silencio, es posible que no suenen.' },
     ],
   },
 
@@ -607,6 +727,24 @@ export const METRICS: Record<string, MetricHelp> = {
   },
   paymentFee: { title: 'Comisión del medio de pago', what: 'Lo que te cobra el datáfono o la plataforma. Se registra como gasto operativo.', formula: 'pago × % configurado ÷ 100' },
   sellThrough: { title: '% vendido', what: 'Qué parte de ese producto ya se vendió.', formula: 'vendidas ÷ (vendidas + disponibles)' },
+  lots: {
+    title: 'Lotes por precio de compra',
+    what: 'Cada compra queda en su propio lote con su precio. Al vender sale primero el más antiguo (o el que elijas) con su costo real.',
+    formula: 'costo de lo vendido = costo de cada lote × unidades que salen de él',
+    note: 'Apagado, el producto usa costo promedio: valor total ÷ unidades con costo conocido.',
+  },
+  priceHistory: { title: 'Lo que has pagado', what: 'Tus últimas compras de este producto (en todos los inventarios) con el precio por unidad, y el último precio de cada proveedor.', note: '▼ = más barato que la compra anterior; ▲ = más caro.' },
+  addedCost: {
+    title: 'Gasto agregado a una compra',
+    what: 'La parte del gasto que corresponde a lo que sigue en tu inventario se suma a su costo. La parte de lo que ya vendiste se registra como gasto.',
+    formula: 'parte al costo = parte del gasto × unidades en existencia ÷ unidades compradas',
+  },
+  personalMonth: {
+    title: 'Lo que sacas vs. lo que gana el negocio',
+    what: 'Compara la ganancia neta del mes con todo lo que sacaste para ti (retiros y préstamos a ti, menos lo que devolviste).',
+    formula: 'ganancia que queda = ganancia neta del mes − lo que sacaste',
+    note: 'Si es negativa, sacaste más de lo que el negocio ganó: te estás comiendo el capital.',
+  },
 };
 
 /* ---------------- Ayuda por pantalla (?) ---------------- */
@@ -621,16 +759,16 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
   home: { title: 'Inicio', intro: 'Resumen de tu actividad del periodo, saldos a hoy y avisos. Cambia el periodo o el inventario arriba.', articles: ['empezar', 'informes', 'capital'] },
   inventories: { title: 'Inventarios', intro: 'Tus inventarios. Toca uno para ver sus productos y existencias.', articles: ['inventarios', 'productos', 'vistas'] },
   inventory: { title: 'Inventario', intro: 'Productos y existencias de este inventario. Desde ⋮ cambias la modalidad, lo archivas o ves su historial.', articles: ['inventarios', 'productos', 'stock-existente'] },
-  product: { title: 'Producto', intro: 'Existencias, unidades y movimientos del producto. Toca una unidad para ver su ficha.', articles: ['productos', 'unidades', 'piezas'] },
+  product: { title: 'Producto', intro: 'Existencias, unidades, lotes por precio de compra, lo que has pagado y movimientos del producto.', articles: ['productos', 'lotes', 'precio-compra', 'unidades'] },
   'product-form': { title: 'Producto', intro: 'Crea o edita un producto. Para teléfonos, elige el modelo del catálogo.', articles: ['productos'] },
   stock: { title: 'Ingresar stock existente', intro: 'Mercancía que ya tenías antes de usar la app. Cuenta como capital aportado en mercancía.', articles: ['stock-existente', 'piezas', 'capital'] },
   unit: { title: 'Ficha del equipo', intro: 'Todo sobre este equipo: costo, estado, piezas cambiadas, precio sugerido e historial.', articles: ['unidades', 'piezas', 'precios'] },
-  'purchase-form': { title: 'Nueva compra', intro: 'Registra lo que compraste, su estado, piezas y cómo lo pagaste.', articles: ['compras', 'deudas', 'piezas'] },
-  purchase: { title: 'Compra', intro: 'Detalle de la compra. Si te equivocaste en los importes, anúlala y regístrala de nuevo.', articles: ['compras', 'devoluciones'] },
-  'sale-form': { title: 'Nueva venta', intro: 'Elige lo que vendes y el precio. La app te muestra el costo, el mínimo y el sugerido.', articles: ['ventas', 'precios', 'comisiones'] },
+  'purchase-form': { title: 'Nueva compra', intro: 'Registra lo que compraste, su estado, piezas y cómo lo pagaste. Verás cuánto pagaste la última vez.', articles: ['compras', 'precio-compra', 'lotes', 'deudas'] },
+  purchase: { title: 'Compra', intro: 'Detalle de la compra. Puedes agregarle gastos (transporte del viaje). Si te equivocaste en los importes, anúlala y regístrala de nuevo.', articles: ['compras', 'gasto-compra', 'devoluciones'] },
+  'sale-form': { title: 'Nueva venta', intro: 'Elige lo que vendes y el precio. La app te muestra el costo, el mínimo y el sugerido (y el de cada lote).', articles: ['ventas', 'precios', 'lotes', 'comisiones'] },
   sale: { title: 'Venta', intro: 'Detalle, pagos, devoluciones y garantías de la venta.', articles: ['pagos', 'devoluciones', 'garantias'] },
   operations: { title: 'Operaciones', intro: 'Tus ventas, compras y gastos. Filtra las ventas por cobrar.', articles: ['ventas', 'compras', 'gastos'] },
-  'expense-form': { title: 'Nuevo gasto', intro: 'Elige si el gasto resta de la ganancia (operativo) o se suma al costo de un equipo (capitalizado).', articles: ['gastos'] },
+  'expense-form': { title: 'Nuevo gasto', intro: 'Elige de quién es el gasto: del negocio (resta de la ganancia), de una compra o viaje (se suma al costo) o personal (plata que sacas para ti).', articles: ['gastos', 'gasto-compra', 'gastos-personales'] },
   capital: { title: 'Capital', intro: 'Cuánto vale tu negocio, cuánto has puesto y cuánto ha crecido. Toca ⓘ para ver cada cálculo.', articles: ['capital', 'aportes', 'metricas', 'metas'] },
   debts: { title: 'Deudas y préstamos', intro: 'Lo que debe el negocio y lo que tú le debes. Registra abonos e intereses.', articles: ['deudas', 'aportes'] },
   debt: { title: 'Deuda', intro: 'Abonos e intereses de esta deuda.', articles: ['deudas'] },
@@ -643,8 +781,10 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
   views: { title: 'Vistas consolidadas', intro: 'Varios inventarios juntos sin duplicar nada.', articles: ['vistas'] },
   catalog: { title: 'Catálogo', intro: 'Modelos disponibles al crear productos. Puedes agregar marcas y modelos.', articles: ['productos'] },
   backup: { title: 'Respaldo', intro: 'Crea una copia de todo o restaura una. Importar reemplaza todos los datos.', articles: ['respaldo', 'privacidad'] },
-  settings: { title: 'Configuración', intro: 'Ajustes del negocio, estancado, precios y comisiones.', articles: ['configuracion', 'estancado', 'comisiones'] },
-  more: { title: 'Más', intro: 'Todas las secciones de la app.', articles: ['empezar'] },
+  settings: { title: 'Configuración', intro: 'Ajustes del negocio, estancado, precios, comisiones, lotes, consejos y sonidos.', articles: ['configuracion', 'lotes', 'sonidos', 'comisiones'] },
+  more: { title: 'Más', intro: 'Todas las secciones de la app.', articles: ['empezar', 'recorridos'] },
+  personal: { title: 'Gastos personales', intro: 'Los gustos y gastos hormiga que pagas con plata del negocio, comparados con lo que el negocio gana en el mes.', articles: ['gastos-personales', 'aportes'] },
+  learn: { title: 'Aprende de negocios', intro: 'Lecciones cortas con ejemplos, calculadoras y preguntas, y recorridos guiados por la app.', articles: ['recorridos', 'empezar'] },
 };
 
 /* ---------------- Novedades ---------------- */
@@ -656,6 +796,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.1.0',
+    title: 'Novedades de la versión 2.1',
+    items: [
+      { title: 'Lotes por precio de compra', text: 'Si compras lo mismo a precios distintos, cada compra guarda su precio. Al vender sale primero lo más antiguo (o el lote que elijas). Se apaga por producto.', to: '/ayuda/lotes' },
+      { title: 'La última vez pagaste…', text: 'Al comprar ves lo que pagaste antes y a quién, si ahora es más barato, y un aviso si ya tienes unidades que te costaron más.', to: '/ayuda/precio-compra' },
+      { title: 'Gastos del viaje de compras', text: 'Agrega el transporte a una compra ya registrada o repártelo entre las compras del día.', to: '/gastos/nuevo?tipo=compra' },
+      { title: 'Gastos personales', text: 'Registra tus gustos y gastos hormiga: la app te dice si salen de tus ganancias o del capital. La plata del negocio es del negocio.', to: '/personal' },
+      { title: 'Teléfonos por compra', text: 'En la ficha de un modelo, mira tus equipos agrupados por la compra en la que llegaron.' },
+      { title: 'Aprende de negocios', text: '10 lecciones cortas con calculadoras y preguntas, y recorridos guiados por la app.', to: '/aprende' },
+      { title: 'Sonidos', text: 'Sonidos suaves al usar la app. Cada uno se activa o desactiva por separado en Configuración.', to: '/ajustes' },
+      { title: 'Consejo del día', text: 'Un consejo de negocios en Inicio (se puede apagar).' },
+    ],
+  },
   {
     version: '2.0.0',
     title: 'Novedades de la versión 2',
@@ -672,3 +826,68 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
 ];
+
+/* ---------------- Consejos (v2.1) ---------------- */
+
+/** Consejos sobre la plata personal y la del negocio (se muestran al registrar un gasto personal). */
+export const MONEY_TIPS: string[] = [
+  'Aunque sean 5 000 pesos, si los sacas para ti, regístralos: así sabes de verdad cuánto te deja el negocio.',
+  'Págate un "sueldo" fijo cada mes (por ejemplo, una parte de la ganancia del mes anterior) y date tus gustos de ahí, no de la caja del negocio.',
+  'Un gasto hormiga de 5 000 al día son unos 150 000 al mes: lo mismo que la ganancia de varios accesorios. Lo pequeño suma.',
+  'Si sacas más de lo que el negocio ganó en el mes, te estás comiendo el capital: la plata para volver a comprar mercancía.',
+  'Separa la plata en dos lugares (por ejemplo, dos cuentas de Nequi o dos bolsillos): uno del negocio y otro tuyo. Así no se mezclan.',
+  'Antes de darte un gusto con plata del negocio, pregúntate: ¿esto me deja comprar menos mercancía la próxima vez?',
+  'Si necesitas plata del negocio para una emergencia, regístrala como "préstamo a ti" y devuélvela: así el negocio no pierde capital.',
+  'Primero reinvierte, después disfruta. Un negocio que reinvierte sus ganancias crece mucho más rápido.',
+];
+
+export interface DailyTip {
+  title: string;
+  text: string;
+  to?: string;
+  toLabel?: string;
+}
+
+/** Consejo del día en Inicio (se puede apagar en Configuración). */
+export const DAILY_TIPS: DailyTip[] = [
+  { title: 'Costo no es precio', text: 'El costo es lo que pagaste (más transporte y reparaciones). El precio es lo que cobras. Tu ganancia es la diferencia, y por eso registrar bien el costo es tan importante.', to: '/aprende/costo', toLabel: 'Aprender más' },
+  { title: 'Vender mucho no es ganar mucho', text: 'Si vendes por debajo del costo, cada venta te hace perder. Fíjate en el precio mínimo que te muestra la app al vender.', to: '/aprende/margen', toLabel: 'Aprender más' },
+  { title: 'Caja no es ganancia', text: 'Que haya plata en la caja no significa que estés ganando: puede ser de un aporte o de una deuda. La ganancia está en Informes.', to: '/aprende/caja', toLabel: 'Aprender más' },
+  { title: 'El dinero dormido cuesta', text: 'Un producto que lleva meses sin venderse tiene tu plata quieta. A veces conviene bajarle un poco el precio y volver a comprar algo que rote más.', to: '/informes?tab=tiempos', toLabel: 'Ver tiempos de venta' },
+  { title: 'Anota tus precios de mercado', text: 'Revisa Marketplace y anota cuánto se venden los modelos que más mueves. Así la app te sugiere un buen precio al vender.', to: '/precios', toLabel: 'Precios de mercado' },
+  { title: 'Negocia con datos', text: 'Antes de comprar, mira cuánto le pagaste la última vez a cada proveedor (en la ficha del producto). Es tu mejor argumento para pedir descuento.', to: '/aprende/proveedores', toLabel: 'Aprender más' },
+  { title: 'El transporte también es costo', text: 'Lo que gastas en pasajes y comida para ir a comprar mercancía sube el costo de lo que compraste. Agrégalo a la compra para saber tu ganancia real.', to: '/ayuda/gasto-compra', toLabel: 'Cómo hacerlo' },
+  { title: 'Haz respaldos', text: 'Tus datos solo viven en este teléfono. Una vez por semana prepara un respaldo y guárdalo fuera (WhatsApp, Drive o correo).', to: '/respaldo', toLabel: 'Ir a Respaldo' },
+  { title: 'La plata del negocio es del negocio', text: 'Si sacas para ti, regístralo como gasto personal. La app te dice si sale de tus ganancias o si te estás comiendo el capital.', to: '/personal', toLabel: 'Gastos personales' },
+  { title: 'Gira rápido', text: 'Ganar 50 000 en una semana es mejor que ganar 80 000 en tres meses: con la plata que vuelve rápido puedes comprar y vender otra vez.', to: '/aprende/rotacion', toLabel: 'Aprender más' },
+  { title: 'Compra más barato, vende con cuidado', text: 'Si un proveedor te baja el precio, no rebajes de inmediato lo que ya tenías: esas unidades te costaron más. La app separa cada precio en lotes.', to: '/ayuda/lotes', toLabel: 'Qué son los lotes' },
+  { title: 'Cuadra tu caja', text: 'Cuenta tu plata de vez en cuando y compárala con la caja calculada. Si no coincide, algo no se registró: usa "Cuadrar caja".', to: '/capital', toLabel: 'Ir a Capital' },
+  { title: 'Fija un margen mínimo', text: 'Decide cuánto es lo mínimo que quieres ganar por producto (en pesos o en %) y la app te avisará si vendes por debajo.', to: '/ajustes', toLabel: 'Configurarlo' },
+  { title: 'Págate un sueldo', text: 'Ponte un sueldo fijo al mes y no saques más. Así sabes cuánto puedes gastar sin frenar el negocio.', to: '/aprende/sueldo', toLabel: 'Aprender más' },
+];
+
+/** Elige un consejo que cambia cada día (siempre el mismo durante el día). */
+export function pickTip<T>(list: T[], when: Date = new Date(), offset = 0): T {
+  const day = Math.floor((when.getTime() - when.getTimezoneOffset() * 60_000) / 86_400_000);
+  return list[(((day + offset) % list.length) + list.length) % list.length];
+}
+
+/* ---------------- Cifras sin cortes de línea ---------------- */
+
+/** Une los grupos de miles con espacio duro ("1 300 000" no se parte en dos líneas). */
+export function nb(text: string): string {
+  return text.replace(/(\d) (?=\d{3}(?!\d))/g, '$1\u00a0');
+}
+
+export function nbBlock(b: Block): Block {
+  if ('p' in b) return { p: nb(b.p) };
+  if ('h' in b) return b;
+  if ('tip' in b) return { tip: nb(b.tip) };
+  if ('warn' in b) return { warn: nb(b.warn) };
+  if ('steps' in b) return { steps: b.steps.map(nb) };
+  return { list: b.list.map(nb) };
+}
+
+for (const a of ARTICLES) a.blocks = a.blocks.map(nbBlock);
+for (let i = 0; i < MONEY_TIPS.length; i++) MONEY_TIPS[i] = nb(MONEY_TIPS[i]);
+for (const t of DAILY_TIPS) t.text = nb(t.text);

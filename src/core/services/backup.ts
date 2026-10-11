@@ -4,7 +4,10 @@ import {
   DATA_TABLES,
   DB_SCHEMA_VERSION,
   TABLES_V1,
+  TABLES_V2,
   alignUnitMovementV2,
+  upgradeLotsV3,
+  upgradeProductV3,
   upgradePurchaseV2,
   upgradeSettingsV2,
   upgradeUnitV2,
@@ -76,6 +79,7 @@ export const TABLE_LABEL: Partial<Record<TableName, string>> = {
   debtPayments: 'Abonos a deudas',
   marketPrices: 'Precios de mercado',
   goals: 'Metas',
+  lots: 'Lotes',
 };
 
 /* ---------------- Codificación ---------------- */
@@ -255,11 +259,15 @@ export const BACKUP_MIGRATIONS: Record<number, BackupMigration> = {
       goals: [],
     };
   },
+  2: (t) => {
+    const lots = upgradeLotsV3(t.products as Row[], t.movements as never, t.purchases as Row[], t.sales as Row[]);
+    return { ...t, products: (t.products as Row[]).map((p) => upgradeProductV3({ ...p })), lots };
+  },
 };
 
 /** Tablas que debe traer un respaldo según la versión de datos con la que se creó. */
 export function tablesForSchema(version: number): readonly string[] {
-  return version <= 1 ? TABLES_V1 : DATA_TABLES;
+  return version <= 1 ? TABLES_V1 : version === 2 ? TABLES_V2 : DATA_TABLES;
 }
 
 export function migrateTables(tables: Tables, fromVersion: number, toVersion = DB_SCHEMA_VERSION, migrations = BACKUP_MIGRATIONS): Tables {
@@ -376,11 +384,12 @@ const PK: Record<TableName, string> = {
   debtPayments: 'id',
   marketPrices: 'id',
   goals: 'id',
+  lots: 'id',
 };
 
 const SPEC: Partial<Record<TableName, Record<string, FieldType>>> = {
   inventories: { name: 'str', mode: 'str', archived: 'bool', createdAt: 'iso' },
-  products: { inventoryId: 'str', kind: 'str', tracking: 'str', name: 'str', qty: 'int', stockValue: 'int', unknownCostQty: 'int', archived: 'bool' },
+  products: { inventoryId: 'str', kind: 'str', tracking: 'str', name: 'str', qty: 'int', stockValue: 'int', unknownCostQty: 'int', archived: 'bool', costing: 'str' },
   units: { productId: 'str', inventoryId: 'str', code: 'str', status: 'str', acquiredAt: 'iso?', availableSince: 'iso?', baseCost: 'int?', extraCost: 'int', cycle: 'int', saleId: 'str?', partsHistory: 'arr' },
   purchases: { opId: 'str', inventoryId: 'str', date: 'iso', subtotal: 'int', extraCosts: 'int', total: 'int', status: 'str', paymentSource: 'str', debtId: 'str?' },
   purchaseLines: { purchaseId: 'str', productId: 'str', quantity: 'int', price: 'int', totalCost: 'int', unitIds: 'arr' },
@@ -406,6 +415,7 @@ const SPEC: Partial<Record<TableName, Record<string, FieldType>>> = {
   debtPayments: { opId: 'str', debtId: 'str', date: 'iso', principal: 'int', interest: 'int', expenseId: 'str?' },
   marketPrices: { key: 'str', model: 'str', capacity: 'str', condition: 'str', price: 'int', date: 'iso' },
   goals: { inventoryId: 'str?', name: 'str', metric: 'str', target: 'int', dueDate: 'iso?', status: 'str' },
+  lots: { productId: 'str', inventoryId: 'str', source: 'str', date: 'iso?', qtyIn: 'int', valueIn: 'int', qty: 'int', value: 'int', costKnown: 'bool' },
 };
 
 function checkType(v: unknown, t: FieldType): boolean {

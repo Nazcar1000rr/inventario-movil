@@ -41,6 +41,7 @@ import { navigate } from '../router';
 import { db, useAction, useLive, usePref } from '../store';
 import { toUnitDetails, UnitDetailFields, type UnitDetailValue } from './Products';
 import { ConditionChips } from '../components/parts';
+import { AddPurchaseCostSheet, PurchaseAddedCostsCard, PurchaseHints } from '../components/lots';
 
 interface LineState {
   key: string;
@@ -63,6 +64,14 @@ const newLine = (product: Product | null = null, condition = ''): LineState => (
   details: {},
   condition,
 });
+
+/** Costo por unidad estimado de una línea (con gastos si ya hay vista previa). */
+function lineUnitCost(l: LineState, pv: { totalCost: number } | undefined): number | null {
+  if (!l.qty) return null;
+  if (pv) return Math.round(pv.totalCost / l.qty);
+  const lp = linePrice(l);
+  return lp === null ? null : Math.round(lp / l.qty);
+}
 
 function linePrice(l: LineState): number | null {
   if (l.priceMode === 'total') return l.totalPrice;
@@ -204,12 +213,12 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
                 }
               >
                 <div className="stack">
-                  <button type="button" className="btn block" style={{ justifyContent: 'space-between' }} disabled={!current} onClick={() => setPicking(i)}>
+                  <button type="button" className="btn block" style={{ justifyContent: 'space-between' }} disabled={!current} onClick={() => setPicking(i)} data-tour="pu-product">
                     <span className="ellipsis">{l.product?.name ?? 'Elegir o crear producto…'}</span>
                     <Icon name="chevron" size={18} />
                   </button>
                   {l.product ? <span className="small muted">{TRACKING_LABEL[l.product.tracking]}</span> : null}
-                  <div className="grid-2">
+                  <div className="grid-2" data-tour="pu-qty-price">
                     <Field label="Cantidad" htmlFor={`pu-q-${i}`}>
                       <IntInput id={`pu-q-${i}`} value={l.qty} onChange={(v) => setLine(i, { qty: v === null ? null : Math.min(v, l.product?.tracking === 'quantity' ? 100_000 : 500) })} />
                     </Field>
@@ -234,6 +243,7 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
                       <strong>{pv.unitCosts.length && Math.min(...pv.unitCosts) !== Math.max(...pv.unitCosts) ? `${formatCOP(Math.min(...pv.unitCosts))}–${formatCOP(Math.max(...pv.unitCosts))}` : formatCOP(pv.unitCosts[0] ?? 0)}</strong>
                     </p>
                   ) : null}
+                  {l.product ? <PurchaseHints productId={l.product.id} supplierId={supplierId} unitCost={lineUnitCost(l, pv)} /> : null}
                   {l.product?.tracking === 'unit' ? (
                     <Field label="Estado del equipo" hint="Nuevo, usado o restaurado.">
                       <ConditionChips value={l.condition} onChange={(c) => { setLine(i, { condition: c }); setLastCondition(c); }} />
@@ -257,7 +267,7 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
             <Icon name="plus" /> Agregar otro producto
           </button>
 
-          <Field label="Gastos adicionales de la compra" htmlFor="pu-extra" hint="Transporte, envío, comisión del proveedor… Se suman al costo de lo comprado (no se restan otra vez como gasto).">
+          <Field tour="pu-extra" label="Gastos adicionales de la compra" htmlFor="pu-extra" hint="Transporte, envío, comisión del proveedor… Se suman al costo de lo comprado (no se restan otra vez como gasto). ¿Hiciste varias compras en el mismo viaje? Registra el pasaje después en una de ellas con «Agregar gasto a la compra» y repártelo entre todas.">
             <MoneyInput id="pu-extra" value={extra} onChange={setExtra} />
           </Field>
           {(extra ?? 0) > 0 && lines.length > 1 ? (
@@ -284,7 +294,7 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
             </div>
           </details>
 
-          <Card title="¿Cómo la pagaste?">
+          <Card title="¿Cómo la pagaste?" tour="pu-pay">
             <div className="stack">
               <Chips
                 label="Forma de pago de la compra"
@@ -334,7 +344,7 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
           </Card>
           {localError ? <Notice kind="bad">{localError}</Notice> : null}
           <FormError error={act.error} />
-          <button className="btn primary block" disabled={act.busy}>
+          <button className="btn primary block" disabled={act.busy} data-tour="pu-submit">
             Revisar y registrar compra
           </button>
         </form>
@@ -382,6 +392,14 @@ export function PurchaseFormScreen({ inventoryId, productId }: { inventoryId: st
             ]}
           />
           <p className="small muted">Se sumarán {lines.reduce((a, l) => a + (l.qty ?? 0), 0)} unidad(es) al inventario.</p>
+          {lines.map((l, i) =>
+            l.product ? (
+              <div key={l.key} className="stack-sm">
+                <p className="small strong">{l.product.name}</p>
+                <PurchaseHints productId={l.product.id} supplierId={supplierId} unitCost={lineUnitCost(l, preview?.[i])} />
+              </div>
+            ) : null,
+          )}
         </Sheet>
       ) : null}
     </Page>
@@ -402,6 +420,7 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
     [id],
   );
   const [editing, setEditing] = useState(false);
+  const [addingCost, setAddingCost] = useState(false);
   const act = useAction();
   if (data === undefined) return <Page title="Compra" back="/operaciones?tab=compras"><Loading /></Page>;
   if (data === null) return <Page title="Compra" back="/operaciones?tab=compras"><Empty title="La compra no existe" /></Page>;
@@ -432,6 +451,7 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
           <ActionMenu
             title="Compra"
             actions={[
+              { label: 'Agregar gasto a esta compra', icon: 'receipt', onSelect: () => setAddingCost(true) },
               { label: 'Editar datos (proveedor, fecha, notas)', icon: 'edit', onSelect: () => setEditing(true) },
               { label: 'Anular compra', icon: 'ban', danger: true, onSelect: voidIt },
             ]}
@@ -485,7 +505,14 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
           </Card>
         );
       })}
+      <PurchaseAddedCostsCard purchaseId={p.id} canEdit={p.status === 'active'} />
+      {p.status === 'active' ? (
+        <button type="button" className="btn block" onClick={() => setAddingCost(true)} data-testid="add-cost">
+          <Icon name="receipt" /> Agregar gasto a esta compra
+        </button>
+      ) : null}
       <p className="tiny muted">Registrada el {formatDate(p.createdAt)}.</p>
+      {addingCost ? <AddPurchaseCostSheet purchase={p} onClose={() => setAddingCost(false)} /> : null}
       {editing ? <EditPurchaseSheet id={id} initial={{ notes: p.notes, supplierId: p.supplierId, paymentMethod: p.paymentMethod, date: p.date }} onClose={() => setEditing(false)} /> : null}
     </Page>
   );

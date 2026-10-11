@@ -3,12 +3,15 @@ import { Icon } from './components/Icon';
 import { AskHost, ErrorBoundary, Sheet, ToastHost } from './components/ui';
 import { navigate, useRoute } from './router';
 import { practice } from './store';
+import { TourHost } from './tour';
 import { BackupScreen } from './screens/Backup';
 import { CapitalScreen } from './screens/Capital';
 import { DebtDetailScreen, DebtsScreen } from './screens/Debts';
 import { HelpArticleScreen, HelpScreen, NewsHost, PracticeBanner } from './screens/Help';
 import { CalculatorScreen, MarketPricesScreen } from './screens/Pricing';
 import { SummaryScreen } from './screens/Summary';
+import { PersonalScreen } from './screens/Personal';
+import { LearnScreen, LessonScreen } from './screens/Learn';
 import { CatalogScreen } from './screens/Catalog';
 import { HomeScreen } from './screens/Home';
 import { HistoryScreen, InventoriesScreen, InventoryDetailScreen } from './screens/Inventories';
@@ -49,7 +52,7 @@ function resolve(seg: string[], q: URLSearchParams): ReactNode {
     case 'operaciones':
       return <OperationsScreen tab={(q.get('tab') as 'ventas' | 'compras' | 'gastos') ?? 'ventas'} />;
     case 'gastos':
-      if (b === 'nuevo') return <ExpenseFormScreen inventoryId={q.get('inv')} />;
+      if (b === 'nuevo') return <ExpenseFormScreen key={q.get('tipo') ?? ''} inventoryId={q.get('inv')} kind={q.get('tipo')} />;
       return b ? <ExpenseDetailScreen id={b} /> : <OperationsScreen tab="gastos" />;
     case 'proveedores':
       return b ? <PartyDetailScreen type="supplier" id={b} /> : <PartiesScreen type="supplier" />;
@@ -83,6 +86,10 @@ function resolve(seg: string[], q: URLSearchParams): ReactNode {
       return <SummaryScreen />;
     case 'ayuda':
       return b ? <HelpArticleScreen id={b} /> : <HelpScreen />;
+    case 'personal':
+      return <PersonalScreen />;
+    case 'aprende':
+      return b ? <LessonScreen id={b} /> : <LearnScreen />;
   }
   return null;
 }
@@ -102,6 +109,7 @@ const SIDE: { href: string; label: string; icon: string; key: string }[] = [
   { href: '/operaciones?tab=gastos', label: 'Gastos', icon: 'receipt', key: 'gastos' },
   { href: '/capital', label: 'Capital', icon: 'trend', key: 'capital' },
   { href: '/deudas', label: 'Deudas', icon: 'card', key: 'deudas' },
+  { href: '/personal', label: 'Gastos personales', icon: 'wallet', key: 'personal' },
   { href: '/informes', label: 'Informes', icon: 'chart', key: 'informes' },
   { href: '/precios', label: 'Precios de mercado', icon: 'tag', key: 'precios' },
   { href: '/garantias', label: 'Garantías', icon: 'shield', key: 'garantias' },
@@ -112,13 +120,16 @@ const SIDE: { href: string; label: string; icon: string; key: string }[] = [
   { href: '/buscar', label: 'Buscar', icon: 'search', key: 'buscar' },
   { href: '/respaldo', label: 'Respaldo', icon: 'download', key: 'respaldo' },
   { href: '/ajustes', label: 'Configuración', icon: 'sliders', key: 'ajustes' },
+  { href: '/aprende', label: 'Aprende de negocios', icon: 'star', key: 'aprende' },
   { href: '/ayuda', label: 'Ayuda', icon: 'help', key: 'ayuda' },
 ];
 
 export const QUICK_ACTIONS: { href: string; label: string; icon: string; hint: string }[] = [
   { href: '/ventas/nueva', label: 'Registrar venta', icon: 'tag', hint: 'Sale del inventario y suma ingresos' },
   { href: '/compras/nueva', label: 'Registrar compra', icon: 'cart', hint: 'Entra al inventario con su costo' },
-  { href: '/gastos/nuevo', label: 'Registrar gasto', icon: 'receipt', hint: 'Transporte, publicidad, empaques…' },
+  { href: '/gastos/nuevo', label: 'Registrar gasto', icon: 'receipt', hint: 'Publicidad, empaques, arriendo…' },
+  { href: '/gastos/nuevo?tipo=compra', label: 'Gasto del viaje de compras', icon: 'truck', hint: 'Pasajes y comida: se reparte entre las compras del día' },
+  { href: '/gastos/nuevo?tipo=personal', label: 'Gasto personal (para ti)', icon: 'wallet', hint: 'Un gusto o gasto hormiga con plata del negocio' },
   { href: '/stock/nuevo', label: 'Ingresar stock existente', icon: 'box', hint: 'Mercancía que ya tenías (no es una compra nueva)' },
   { href: '/capital', label: 'Aporte, retiro o préstamo a ti', icon: 'wallet', hint: 'Dinero que entra o sale entre tú y el negocio' },
   { href: '/deudas', label: 'Deuda o abono', icon: 'card', hint: 'Tarjeta, crédito del proveedor, préstamos' },
@@ -136,11 +147,11 @@ export function App() {
       <PracticeBanner />
       <nav className="side-nav" aria-label="Secciones">
         <div className="brand">Inventario Móvil</div>
-        <button className="btn primary" style={{ marginBottom: 10 }} onClick={() => setQuick(true)}>
+        <button className="btn primary" style={{ marginBottom: 10 }} onClick={() => setQuick(true)} data-tour="quick">
           <Icon name="plus" /> Registrar
         </button>
         {SIDE.map((n) => (
-          <a key={n.href} href={`#${n.href}`} aria-current={sideKey === n.key ? 'page' : undefined}>
+          <a key={n.href} href={`#${n.href}`} aria-current={sideKey === n.key ? 'page' : undefined} data-tour={n.key === 'inventarios' ? 'nav-inventarios' : n.key === 'ventas' ? 'nav-operaciones' : n.key === 'ajustes' ? 'nav-mas' : undefined}>
             <Icon name={n.icon} size={20} /> {n.label}
           </a>
         ))}
@@ -159,18 +170,18 @@ export function App() {
       </main>
       <nav className="bottom-nav" aria-label="Navegación principal">
         {NAV.slice(0, 2).map((n) => (
-          <a key={n.href} className="nav-item" href={`#${n.href}`} aria-current={n.match(seg) ? 'page' : undefined}>
+          <a key={n.href} className="nav-item" href={`#${n.href}`} aria-current={n.match(seg) ? 'page' : undefined} data-tour={`nav-${n.href.slice(1) || 'inicio'}`}>
             <Icon name={n.icon} />
             <span>{n.label}</span>
           </a>
         ))}
-        <button className="nav-item" aria-label="Registrar operación" onClick={() => setQuick(true)}>
+        <button className="nav-item" aria-label="Registrar operación" onClick={() => setQuick(true)} data-tour="quick">
           <span className="nav-plus">
             <Icon name="plus" />
           </span>
         </button>
         {NAV.slice(2).map((n) => (
-          <a key={n.href} className="nav-item" href={`#${n.href}`} aria-current={n.match(seg) ? 'page' : undefined}>
+          <a key={n.href} className="nav-item" href={`#${n.href}`} aria-current={n.match(seg) ? 'page' : undefined} data-tour={`nav-${n.href.slice(1)}`}>
             <Icon name={n.icon} />
             <span>{n.label}</span>
           </a>
@@ -201,6 +212,7 @@ export function App() {
         </Sheet>
       ) : null}
       <NewsHost />
+      <TourHost />
       <AskHost />
       <ToastHost />
     </div>

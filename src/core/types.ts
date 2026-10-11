@@ -27,6 +27,13 @@ export interface Inventory {
 export type ProductKind = 'phone' | 'audio' | 'accessory' | 'other';
 /** unit = cada unidad física se registra por separado; quantity = se maneja por cantidad (lote). */
 export type Tracking = 'unit' | 'quantity';
+/**
+ * Costeo de productos por cantidad:
+ * - lots (v2.1, por defecto): cada compra queda como un lote con su propio costo; se vende primero el más antiguo
+ *   (o el que elijas) y la ganancia usa el costo real de ese lote.
+ * - average: costo promedio ponderado (todo junto).
+ */
+export type Costing = 'average' | 'lots';
 
 export interface CatalogModel {
   id: ID;
@@ -64,6 +71,8 @@ export interface Product {
   stockValue: Money;
   /** Unidades (de qty) cuyo costo es desconocido. Se consumen primero (FIFO: son el stock más antiguo). */
   unknownCostQty: number;
+  /** Solo para tracking = 'quantity'. En productos por unidad no se usa. */
+  costing: Costing;
   archived: boolean;
   createdAt: ISODate;
   updatedAt: ISODate;
@@ -152,6 +161,40 @@ export interface Unit {
   notes: string;
   createdAt: ISODate;
   updatedAt: ISODate;
+}
+
+export type LotSource = 'purchase' | 'initial' | 'adjust' | 'return' | 'opening';
+
+/** Lote de un producto por cantidad (v2.1): lo que entró junto, con su propio costo. */
+export interface Lot {
+  id: ID;
+  productId: ID;
+  inventoryId: ID;
+  source: LotSource;
+  purchaseId: ID | null;
+  purchaseLineId: ID | null;
+  supplierId: ID | null;
+  /** Fecha de ingreso (null = desconocida). */
+  date: ISODate | null;
+  /** Cantidad y valor con que se creó el lote. */
+  qtyIn: number;
+  valueIn: Money;
+  /** Lo que queda del lote y su valor a costo (si el costo es conocido). */
+  qty: number;
+  value: Money;
+  costKnown: boolean;
+  notes: string;
+  createdAt: ISODate;
+}
+
+/** De qué lotes salió una venta (para anularla o calcular días exactos). */
+export interface LotTake {
+  lotId: ID;
+  qty: number;
+  cogs: Money;
+  unknown: boolean;
+  /** Fecha de ingreso del lote (para tiempos de venta). */
+  date: ISODate | null;
 }
 
 export interface Supplier {
@@ -252,6 +295,8 @@ export interface SaleLine {
   returnedAmount: Money;
   returnedCogs: Money;
   returnedUnknownQty: number;
+  /** Productos con lotes: de qué lotes salió (v2.1). */
+  lotAllocations?: LotTake[];
 }
 
 export type PaymentKind = 'payment' | 'refund';
@@ -313,6 +358,10 @@ export interface Expense {
   debtId?: ID | null;
   /** Comisión automática del medio de pago (datáfono, etc.). */
   paymentFee?: boolean;
+  /** Gasto capitalizado en productos con lotes: a qué lotes se sumó (v2.1). */
+  lotAllocations?: { lotId: ID; amount: Money }[];
+  /** Gasto de compra agregado después o repartido entre varias compras (v2.1): agrupa las partes. */
+  costGroupId?: ID | null;
   status: OpStatus;
   createdAt: ISODate;
 }
@@ -495,6 +544,12 @@ export interface Settings {
   paymentFees: Record<string, number>;
   /** Mostrar la lista de "Primeros pasos" en Inicio. */
   showGettingStarted: boolean;
+  /** v2.1: los productos por cantidad nuevos separan sus existencias por lote (precio de compra). */
+  lotsByDefault: boolean;
+  /** v2.1: mostrar el análisis y el consejo al registrar un gasto personal. */
+  personalSpendingTips: boolean;
+  /** v2.1: mostrar el consejo del día en Inicio. */
+  dailyTips: boolean;
 }
 
 /* ---------------- Capital, deudas, precios y metas (v2) ---------------- */
@@ -511,6 +566,10 @@ export interface CapitalMovement {
   /** Siempre positivo, excepto en ajustes de caja (negativo = faltante). */
   amount: Money;
   notes: string;
+  /** v2.1: gasto personal pagado con plata del negocio (gusto, gasto hormiga…). Es un retiro o un préstamo a ti. */
+  personal?: boolean;
+  /** v2.1: categoría del gasto personal (Gusto, Gasto hormiga, Comida…). */
+  tag?: string;
   status: OpStatus;
   createdAt: ISODate;
 }

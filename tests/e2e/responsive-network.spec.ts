@@ -24,6 +24,9 @@ test('21. diseño adaptable: sin desbordes horizontales en 8 tamaños de pantall
   await page.getByText('iPhone 17 Pro Max 2 TB').click();
   const productUrl = page.url().split('#')[1];
   const unitHref = await page.locator('a[href^="#/unidades/"]').first().getAttribute('href');
+  await page.goto(`/#/inventarios/${inv}`);
+  await page.getByText(/Cargador inalámbrico MagSafe/).first().click();
+  const accessoryUrl = page.url().split('#')[1];
 
   const screens: [string, string][] = [
     ['inicio', '/'],
@@ -44,6 +47,12 @@ test('21. diseño adaptable: sin desbordes horizontales en 8 tamaños de pantall
     ['resumen', '/resumen'],
     ['ayuda', '/ayuda'],
     ['manual', '/ayuda/manual'],
+    ['accesorio-lotes', accessoryUrl],
+    ['gasto-personal', '/gastos/nuevo?tipo=personal'],
+    ['gasto-viaje', '/gastos/nuevo?tipo=compra'],
+    ['personal', '/personal'],
+    ['aprende', '/aprende'],
+    ['leccion', '/aprende/lotes'],
   ];
   for (const [vname, w, h] of VIEWPORTS) {
     await page.setViewportSize({ width: w, height: h });

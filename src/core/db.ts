@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { buildLotsFromHistory } from './lots';
 import type {
   CapitalMovement,
   CatalogModel,
@@ -11,6 +12,7 @@ import type {
   Goal,
   HistoryEntry,
   Inventory,
+  Lot,
   MarketPrice,
   MetaRecord,
   Movement,
@@ -31,7 +33,7 @@ import type {
 } from './types';
 
 /** Versión del esquema de datos. Debe coincidir con la última `version()` declarada abajo. */
-export const DB_SCHEMA_VERSION = 2;
+export const DB_SCHEMA_VERSION = 3;
 export const DB_NAME = 'inventario-movil';
 
 /**
@@ -79,6 +81,12 @@ export const SCHEMA_V2: Record<string, string> = {
   goals: 'id, inventoryId',
 };
 
+/** v3 (app 2.1): lotes por precio de compra. */
+export const SCHEMA_V3: Record<string, string> = {
+  ...SCHEMA_V2,
+  lots: 'id, productId, inventoryId, purchaseId, date',
+};
+
 /** Tablas que existían en la versión 1 (para validar respaldos antiguos). */
 export const TABLES_V1 = [
   'meta',
@@ -105,6 +113,9 @@ export const TABLES_V1 = [
   'consolidatedViews',
   'history',
 ] as const;
+
+/** Tablas de la versión 2 (app 2.0). */
+export const TABLES_V2 = [...TABLES_V1, 'capital', 'debts', 'debtPayments', 'marketPrices', 'goals'] as const;
 
 /** Tablas de datos de negocio (todas se incluyen en el respaldo). */
 export const DATA_TABLES = [
@@ -136,6 +147,7 @@ export const DATA_TABLES = [
   'debtPayments',
   'marketPrices',
   'goals',
+  'lots',
 ] as const;
 
 export type TableName = (typeof DATA_TABLES)[number];
@@ -169,6 +181,7 @@ export class AppDB extends Dexie {
   debtPayments!: Table<DebtPayment, string>;
   marketPrices!: Table<MarketPrice, string>;
   goals!: Table<Goal, string>;
+  lots!: Table<Lot, string>;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -190,6 +203,21 @@ export class AppDB extends Dexie {
             const u = typeof m.unitId === 'string' ? byId.get(m.unitId) : undefined;
             if (u) alignUnitMovementV2(m, u);
           });
+      });
+    // v3 (app 2.1): lotes por precio. Los productos por cantidad que ya existían se separan en lotes a partir de su
+    // historial, conservando exactamente su valor a costo (ver buildLotsFromHistory).
+    this.version(3)
+      .stores(SCHEMA_V3)
+      .upgrade(async (tx) => {
+        const [products, movements, purchases, sales] = await Promise.all([
+          tx.table('products').toArray(),
+          tx.table('movements').toArray(),
+          tx.table('purchases').toArray(),
+          tx.table('sales').toArray(),
+        ]);
+        const lots = upgradeLotsV3(products as Record<string, unknown>[], movements as Movement[], purchases as Record<string, unknown>[], sales as Record<string, unknown>[]);
+        await tx.table('products').toCollection().modify((p: Record<string, unknown>) => upgradeProductV3(p));
+        if (lots.length) await tx.table('lots').bulkAdd(lots);
       });
   }
 
@@ -267,6 +295,46 @@ export function applyKnownCostToMovement(m: Record<string, unknown>, baseCost: n
   m.costDelta = (typeof m.costDelta === 'number' ? m.costDelta : 0) + sign * baseCost;
   if (m.type === 'adjust_out') m.writeOff = (typeof m.writeOff === 'number' ? m.writeOff : 0) + baseCost;
   m.unknownDelta = 0;
+}
+
+/* ---- Conversión v2 → v3 (Dexie y respaldos) ---- */
+
+export function upgradeProductV3(p: Record<string, unknown>): Record<string, unknown> {
+  if (p.costing !== 'average' && p.costing !== 'lots') p.costing = p.tracking === 'quantity' ? 'lots' : 'average';
+  return p;
+}
+
+/** Lotes para todos los productos por cantidad con existencias (reconstruidos desde su historial). */
+export function upgradeLotsV3(
+  products: Record<string, unknown>[],
+  movements: Movement[],
+  purchases: Record<string, unknown>[],
+  sales: Record<string, unknown>[],
+): Lot[] {
+  const voidedSales = new Set(sales.filter((s) => s.status === 'voided').map((s) => s.id as string));
+  const voidedPurchases = new Set(purchases.filter((p) => p.status === 'voided').map((p) => p.id as string));
+  const supplier = new Map(purchases.map((p) => [p.id as string, (p.supplierId as string | null) ?? null]));
+  const byProduct = new Map<string, Movement[]>();
+  for (const m of movements) {
+    const a = byProduct.get(m.productId) ?? [];
+    a.push(m);
+    byProduct.set(m.productId, a);
+  }
+  const now = new Date().toISOString();
+  const out: Lot[] = [];
+  for (const p of products) {
+    if (p.tracking !== 'quantity' || p.costing === 'average') continue;
+    out.push(
+      ...buildLotsFromHistory(p as unknown as Product, byProduct.get(p.id as string) ?? [], {
+        voidedSales,
+        voidedPurchases,
+        supplierOf: (id) => supplier.get(id) ?? null,
+        now,
+        newId: () => crypto.randomUUID(),
+      }),
+    );
+  }
+  return out;
 }
 
 let current: AppDB | null = null;

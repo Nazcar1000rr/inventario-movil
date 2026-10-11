@@ -5,6 +5,7 @@ import { addMovement, logHistory, requireInventory, requireProduct } from './bas
 import { insertUnit, type UnitDetails } from './products';
 import { tx } from './stock';
 import { insertPurchaseDebt, type PurchaseFunding } from './debts';
+import { addLot, usesLots } from './lots';
 
 export interface PurchaseLineInput {
   productId: ID;
@@ -170,6 +171,17 @@ export async function createPurchase(db: AppDB, input: PurchaseInput): Promise<P
           stockValue: p.stockValue + pv.totalCost,
           updatedAt: nowISO(),
         });
+        if (usesLots(p))
+          await addLot(db, {
+            product: p,
+            source: 'purchase',
+            qty: l.quantity,
+            value: pv.totalCost,
+            date,
+            purchaseId: purchase.id,
+            purchaseLineId: line.id,
+            supplierId: purchase.supplierId,
+          });
         await addMovement(db, {
           at: date,
           inventoryId: inv.id,
@@ -218,6 +230,7 @@ export async function updatePurchaseInfo(
       upd.supplierId = patch.supplierId;
       const lines = await db.purchaseLines.where('purchaseId').equals(id).toArray();
       for (const l of lines) for (const uid of l.unitIds) await db.units.update(uid, { supplierId: patch.supplierId });
+      await db.lots.where('purchaseId').equals(id).modify({ supplierId: patch.supplierId });
     }
     if (patch.date !== undefined) {
       const date = assertDate(patch.date, 'date', 'Fecha de compra');
@@ -244,6 +257,7 @@ export async function updatePurchaseInfo(
       }
       const mvs = await db.movements.where('refId').equals(id).toArray();
       for (const m of mvs) if (m.type === 'purchase') await db.movements.update(m.id, { at: date });
+      await db.lots.where('purchaseId').equals(id).modify({ date });
       upd.date = date;
       if (p.debtId) {
         const debt = await db.debts.get(p.debtId);
@@ -278,6 +292,8 @@ export async function voidPurchase(db: AppDB, id: ID, reason: string): Promise<v
     if (p.status === 'voided') return;
     if (p.debtId && (await db.debtPayments.where('debtId').equals(p.debtId).count()) > 0)
       fail('debt_has_payments', 'Esta compra se pagó con una deuda que ya tiene abonos. Anula primero esos abonos en Deudas.');
+    if ((await db.expenses.where('purchaseId').equals(id).filter((e) => e.status === 'active' && !!e.costGroupId).count()) > 0)
+      fail('has_costs', 'Esta compra tiene gastos agregados después. Anúlalos primero desde el detalle de la compra.');
     const lines = await db.purchaseLines.where('purchaseId').equals(id).toArray();
     const purchaseMoves = (await db.movements.where('refId').equals(id).toArray()).filter((m) => m.type === 'purchase');
     const minSeq = Math.min(...purchaseMoves.map((m) => m.seq));
@@ -291,6 +307,10 @@ export async function voidPurchase(db: AppDB, id: ID, reason: string): Promise<v
           if (u.extraCost > 0)
             fail('has_extra_cost', `No se puede anular: la unidad ${u.code} tiene costos adicionales registrados.`);
         }
+      } else if (usesLots(prod)) {
+        const lot = await db.lots.where('purchaseId').equals(id).filter((x) => x.productId === prod.id && (x.purchaseLineId === l.id || x.purchaseLineId === null)).first();
+        if (!lot || lot.qty !== l.quantity || lot.value !== l.totalCost)
+          fail('later_outflows', `No se puede anular: del lote de "${prod.name}" de esta compra ya salieron unidades o cambió su costo. Registra un ajuste en su lugar.`);
       } else {
         const later = await db.movements
           .where('productId')
@@ -331,6 +351,7 @@ export async function voidPurchase(db: AppDB, id: ID, reason: string): Promise<v
           stockValue: prod.stockValue - l.totalCost,
           updatedAt: now,
         });
+        if (usesLots(prod)) await db.lots.where('purchaseId').equals(id).filter((x) => x.productId === prod.id && (x.purchaseLineId === l.id || x.purchaseLineId === null)).delete();
         await addMovement(db, {
           at: now,
           inventoryId: p.inventoryId,

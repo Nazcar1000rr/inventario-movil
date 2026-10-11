@@ -1,13 +1,46 @@
 # Pruebas: lo ejecutado y lo pendiente
 
-Fecha de ejecución: 10 de octubre de 2026 (versión 2.0.0).
+Fecha de ejecución: 10 de octubre de 2026 (versión 2.1.0).
 
 Entorno:
 - Linux con Node 22.22.
 - Vitest 5.0.3 + fake-indexeddb 6.2.5: implementación de IndexedDB conforme al estándar, sobre la que corre el mismo código Dexie de la app.
 - Playwright 1.56 con Chromium 141 (compilación 1194), contra la **compilación de producción** (`npm run build` + `vite preview`).
 
-**Resultado: 64/64 pruebas de lógica (5 corridas seguidas sin fallos) y 17/17 pruebas de extremo a extremo aprobadas.** `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+**Resultado: 85/85 pruebas de lógica (3 corridas seguidas sin fallos) y 21/21 pruebas de extremo a extremo aprobadas.** `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+
+## Versión 2.1: qué se probó
+
+| Tema | Cómo se verificó | Resultado |
+|---|---|---|
+| Lotes: salida del más antiguo | Audífonos 5 a 30 000 y 4 a 22 000; vender 6 → costo 172 000 (5 × 30 000 + 22 000), no 158 667 como con promedio; quedan 3 a 22 000 | ✅ |
+| Lote elegido | Vender 2 del lote nuevo → 44 000; pedir más de lo que tiene completa con el más antiguo; lote vacío rechazado; stock insuficiente rechazado | ✅ |
+| Anulaciones y devoluciones | Anular ventas devuelve cada unidad a su lote exacto; devolución crea lote de devolución; devuelto dañado no crea lote | ✅ |
+| Ajustes y stock inicial | Salida desde un lote elegido; entrada y stock inicial crean lotes; lo sin costo sale primero | ✅ |
+| Gastos capitalizados en lotes | 9 000 repartidos por cantidad (5 000 + 4 000) o a un lote elegido; anularlos deja los valores originales | ✅ |
+| Anular compra con lotes | Permitido si su lote sigue intacto aunque se haya vendido de otro lote; bloqueado si su lote cambió | ✅ |
+| Apagar y prender lotes | Costo promedio después de apagar (2 × 238 000 ÷ 9 = 52 889); al prender, lotes reconstruidos con el historial, suma exacta al peso | ✅ |
+| Informes con lotes | Antigüedad por lote (39 y 9 días), días hasta vender con la fecha del lote, costo y mínimo por lote | ✅ |
+| Capital con lotes | Crecimiento = ganancia (diferencia 0) | ✅ |
+| Migración v2 → v2.1 (base de datos) | Base Dexie **versión 2** con datos reales de la v2 (stock sin costo, dos compras, ventas) abierta con la app nueva: lotes reconstruidos (1 de agosto y 5 de septiembre), valor exacto, proveedor, integridad sin problemas | ✅ |
+| Respaldo v2 → v2.1 | Mismo resultado al convertir un respaldo de la v2; respaldo de la 2.1 restaurado idéntico | ✅ |
+| "La última vez pagaste" | Historial en dos inventarios con el mismo producto, por proveedor (mín./máx.), variación −29 % y +10 % | ✅ |
+| Aviso de compra más barata | 7 unidades más caras, 46 000 de diferencia, mínimos con 10 % (33 000 y 27 500); teléfonos comparados por unidad | ✅ |
+| Gasto agregado a una compra | 70 000 por unidades: 40 000 al costo (3 audífonos y 1 teléfono en existencia) y 30 000 como gasto (lo vendido); la ganancia baja exactamente 30 000; anular una parte anula el grupo | ✅ |
+| Gasto del viaje entre compras | 23 800 según lo pagado → 15 000 y 8 800; doble envío no duplica; producto con costo promedio | ✅ |
+| Gastos personales | Ganancia del mes 300 000: 100 000 → verde (33 %), luego 80 000 → amarillo, 250 000 → 200 000 de ganancias y 50 000 del capital (rojo); mes sin ganancia → rojo; no cambia la ganancia; crecimiento cuadra | ✅ |
+| E2E lotes y compras | Aviso de compra más barata (también en la confirmación), ficha con 2 lotes y "Lo que has pagado", venta con aviso de pérdida que desaparece al elegir el lote nuevo, gasto del viaje 9 000 → 8 168 al costo y 832 de gasto, apagar y prender lotes | ✅ (Chromium) |
+| E2E gasto personal | Aviso rojo, proyección de gasto hormiga, consejo; pantalla de gastos personales; etiqueta "Personal" en Capital; consejos apagados en Configuración | ✅ (Chromium) |
+| E2E recorrido y lecciones | Oferta del recorrido en Inicio, 9 pasos sobre pantallas reales, encadena "Tu primera compra"; calculadora de margen (16,7 %); preguntas 2 de 3 y lección marcada | ✅ (Chromium) |
+| E2E sonidos | Apagar solo "Toques" y volumen 30 %: se recuerdan al recargar; al abrir un diálogo suena "abrir" y no "toque" | ✅ (Chromium) |
+| Pantallas nuevas | Las 17 rutas nuevas (lecciones, gastos personales, gasto de viaje, ficha con lotes, ayuda nueva) sin errores; 6 pantallas nuevas sin desborde en 8 tamaños | ✅ (Chromium) |
+
+### Errores reales encontrados y corregidos (v2.1)
+
+1. Quedaban textos de "usted" que la prueba de tono no detectaba ("Primero cree un inventario", "use Comprar", "hágalo desde la ficha"). Corregidos y agregados a la prueba.
+2. El botón "Siguiente lección" se salía de la pantalla con títulos largos (390 px). Ahora el texto se ajusta.
+3. Las cifras de los textos de ayuda se partían entre líneas ("1" / "300 000"). Ahora usan espacio duro.
+4. Los subtítulos de lotes e historial de precios se cortaban con "…". Ahora se ven completos.
 
 ## Versión 2: qué se probó
 
@@ -57,6 +90,8 @@ Las 24 pruebas obligatorias de la v1 (inventarios y modos, compras, ventas, stoc
 | Safari / iOS (instalación, almacenamiento, compartir imagen/PDF con Web Share, selector de Archivos, impresión del manual) | No hay WebKit ni iPhone en este entorno | Lista de verificación de abajo |
 | APK en un teléfono Android (botón Atrás, compartir nativo de imagen/PDF, selector de archivos, cámara, márgenes) | El APK se compila y firma en GitHub Actions, pero no hay un teléfono para instalarlo | Lista de abajo |
 | Actualización real v1 → v2 en un teléfono | Probada con la base real de la v1 en Chromium y en la capa de datos; no en un teléfono con datos reales | Hacer un respaldo antes de actualizar (lista, paso 1) |
+| Actualización v2 → v2.1 en el navegador | Probada en la capa de datos (fake-indexeddb con el mismo código Dexie); no se repitió en Chromium ni en un teléfono | Hacer un respaldo antes de actualizar |
+| Sonidos reales | En Chromium se comprobó qué sonido se dispara, no cómo se oye; en iPhone el modo silencio puede callarlos | Configuración → Sonidos → ▶ en cada uno |
 | Transferencia real entre un iPhone y un Android | Requiere dos dispositivos físicos | Lista de abajo |
 
 ## Lista de verificación en dispositivos físicos (≈ 20 minutos por teléfono)
@@ -73,14 +108,15 @@ Las 24 pruebas obligatorias de la v1 (inventarios y modos, compras, ventas, stoc
 10. **Sin conexión:** modo avión, reabrir y registrar una venta.
 11. **Entre teléfonos:** exportar en uno, importar en el otro y comprobar los totales.
 12. Android: el botón Atrás cierra diálogos, vuelve atrás y en Inicio sale de la app.
+13. **v2.1:** compra unos audífonos a dos precios distintos y mira los lotes en la ficha; registra el pasaje en "Gasto del viaje de compras"; registra un gasto personal; haz el recorrido "Conoce la app"; en Configuración → Sonidos toca ▶ en cada sonido y apaga uno.
 
 ## Cómo volver a ejecutar las pruebas
 
 ```bash
 npm ci
-npm test                     # 64 pruebas de lógica (~3 s)
+npm test                     # 85 pruebas de lógica (~5 s)
 npm run build
-npx playwright test          # 17 pruebas E2E (~5 min). Requiere el navegador Chromium de Playwright
+npx playwright test          # 21 pruebas E2E (~6 min). Requiere el navegador Chromium de Playwright
 ```
 
 Para regenerar el manual en PDF (después de cambiar la ayuda): `npm run build`, `npm run preview` en otra terminal y `node scripts/make-manual-pdf.mjs`; luego `npm run build` otra vez.

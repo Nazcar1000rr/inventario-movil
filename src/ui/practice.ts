@@ -1,6 +1,8 @@
 import {
   addCapitalMovement,
   addMarketPrice,
+  addPersonalSpending,
+  addTripCost,
   createExpense,
   createInventory,
   createProduct,
@@ -34,7 +36,9 @@ export async function seedPracticeData(db: AppDB): Promise<void> {
   const ip13 = await createProduct(db, { inventoryId: inv.id, kind: 'phone', brand: 'Apple', model: 'iPhone 13', capacity: '128 GB', salePrice: 1_950_000 });
   const ip14 = await createProduct(db, { inventoryId: inv.id, kind: 'phone', brand: 'Apple', model: 'iPhone 14 Pro', capacity: '256 GB' });
   const charger = await createProduct(db, { inventoryId: inv.id, kind: 'accessory', name: 'Cargador USB-C 20W', salePrice: 35_000, lowStockThreshold: 3 });
+  const buds = await createProduct(db, { inventoryId: inv.id, kind: 'audio', name: 'Audífonos Bluetooth', salePrice: 45_000 });
   const prov = await createSupplier(db, { name: 'Proveedor Centro', city: 'Medellín' });
+  const prov2 = await createSupplier(db, { name: 'Mayorista Nuevo', city: 'Medellín' });
   const client = await createCustomer(db, { name: 'Cliente de ejemplo' });
 
   await addCapitalMovement(db, { opId: op(), kind: 'contribution', date: ago(75), amount: 8_000_000, inventoryId: inv.id, notes: 'Dinero con el que empecé' });
@@ -99,6 +103,15 @@ export async function seedPracticeData(db: AppDB): Promise<void> {
   const visa = (await db.debts.toArray()).find((d) => d.creditor === 'Visa');
   if (visa) await payDebt(db, { opId: op(), debtId: visa.id, date: ago(10), principal: 1_000_000, interest: 45_000 });
   await addCapitalMovement(db, { opId: op(), kind: 'owner_loan', date: ago(15), amount: 200_000, inventoryId: inv.id, notes: 'Emergencia' });
+
+  // Lotes: los mismos audífonos a dos precios (el proveedor nuevo los dejó más baratos) + el pasaje del viaje
+  await createPurchase(db, { opId: op(), inventoryId: inv.id, supplierId: prov.id, date: ago(35), lines: [{ productId: buds.id, quantity: 5, price: 150_000 }] });
+  await createSale(db, { opId: op(), inventoryId: inv.id, date: ago(12), paymentMethod: 'Efectivo', lines: [{ productId: buds.id, quantity: 2, unitPrice: 45_000 }], initialPayment: 90_000 });
+  const trip1 = await createPurchase(db, { opId: op(), inventoryId: inv.id, supplierId: prov2.id, date: ago(3, 11), lines: [{ productId: buds.id, quantity: 4, price: 88_000 }] });
+  const trip2 = await createPurchase(db, { opId: op(), inventoryId: inv.id, supplierId: prov2.id, date: ago(3, 13), lines: [{ productId: charger.id, quantity: 5, price: 80_000 }] });
+  await addTripCost(db, [trip1.id, trip2.id], { opId: op(), date: ago(3, 18), amount: 16_800, category: 'Pasajes', notes: 'Bus ida y vuelta + almuerzo' });
+  await createSale(db, { opId: op(), inventoryId: inv.id, date: ago(1), paymentMethod: 'Efectivo', lines: [{ productId: buds.id, quantity: 2, unitPrice: 45_000 }], initialPayment: 90_000 });
+  await addPersonalSpending(db, { opId: op(), date: ago(1, 17), amount: 12_000, tag: 'Gasto hormiga', notes: 'Café y pan', willRepay: false });
 
   await addMarketPrice(db, { model: 'iPhone 13', capacity: '128 GB', condition: 'Usado', price: 1_900_000, date: ago(35) });
   await addMarketPrice(db, { model: 'iPhone 13', capacity: '128 GB', condition: 'Usado', price: 1_950_000, date: ago(5) });

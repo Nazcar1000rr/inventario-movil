@@ -28,6 +28,9 @@ import {
   type ReturnDestination,
   type Sale,
   type SaleLine,
+  type Lot,
+  planLotConsumption,
+  summarizeTakes,
 } from '../../core';
 import { InventorySelect, maskImei, PaymentBadge, PAYMENT_METHODS, useDefaultInventory } from '../components/common';
 import { Icon } from '../components/Icon';
@@ -54,6 +57,7 @@ import {
 import { navigate } from '../router';
 import { db, useAction, useLive } from '../store';
 import { L } from '../components/help';
+import { LotSelect } from '../components/lots';
 
 interface SLine {
   key: string;
@@ -61,6 +65,8 @@ interface SLine {
   qty: number | null;
   unitIds: ID[];
   price: number | null;
+  /** Productos con lotes: lote del que sale primero (null = el más antiguo). */
+  lotId: ID | null;
 }
 
 const newSLine = (product: Product | null = null, unitIds: ID[] = []): SLine => ({
@@ -69,6 +75,7 @@ const newSLine = (product: Product | null = null, unitIds: ID[] = []): SLine => 
   qty: unitIds.length || 1,
   unitIds,
   price: product?.salePrice ?? null,
+  lotId: null,
 });
 
 const DELIVERY_LABEL: Record<DeliveryStatus, string> = { na: 'No aplica', pending: 'Pendiente de entrega', delivered: 'Entregado' };
@@ -112,16 +119,17 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
   const productIds = lines.map((l) => l.product?.id).filter(Boolean) as ID[];
   const stock = useLive(
     async (d) => {
-      const out: Record<ID, { available: number; costs: (number | null)[]; unitIds: ID[]; avg: number | null; unknownQty: number }> = {};
+      const out: Record<ID, { available: number; costs: (number | null)[]; unitIds: ID[]; avg: number | null; unknownQty: number; lots: Lot[] | null }> = {};
       for (const pid of productIds) {
         const p = await d.products.get(pid);
         if (!p) continue;
         if (p.tracking === 'unit') {
           const us = (await d.units.where('productId').equals(pid).filter((u) => u.status === 'available').toArray()).sort(fifoOrder);
-          out[pid] = { available: us.length, costs: us.map(unitCost), unitIds: us.map((u) => u.id), avg: null, unknownQty: 0 };
+          out[pid] = { available: us.length, costs: us.map(unitCost), unitIds: us.map((u) => u.id), avg: null, unknownQty: 0, lots: null };
         } else {
           const known = p.qty - p.unknownCostQty;
-          out[pid] = { available: p.qty, costs: [], unitIds: [], avg: known > 0 ? p.stockValue / known : null, unknownQty: p.unknownCostQty };
+          const lots = p.costing === 'lots' ? (await d.lots.where('productId').equals(pid).toArray()).filter((l) => l.qty > 0) : null;
+          out[pid] = { available: p.qty, costs: [], unitIds: [], avg: known > 0 ? p.stockValue / known : null, unknownQty: p.unknownCostQty, lots };
         }
       }
       return out;
@@ -161,6 +169,13 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
         for (const c of cs) {
           if (c === null) unknown++;
           else cost += c;
+        }
+      } else if (s.lots) {
+        const plan = planLotConsumption(s.lots, Math.min(q, s.available), l.lotId);
+        if (plan) {
+          const sum = summarizeTakes(plan);
+          cost += sum.cogs;
+          unknown += sum.unknownQty;
         }
       } else {
         const uq = Math.min(q, s.unknownQty);
@@ -210,7 +225,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
           notes,
           discount: discount ?? 0,
           deliveryStatus: delivery,
-          lines: lines.map((l) => ({ productId: l.product!.id, quantity: l.unitIds.length ? undefined : l.qty ?? 0, unitIds: l.unitIds.length ? l.unitIds : undefined, unitPrice: l.price ?? 0 })),
+          lines: lines.map((l) => ({ productId: l.product!.id, quantity: l.unitIds.length ? undefined : l.qty ?? 0, unitIds: l.unitIds.length ? l.unitIds : undefined, unitPrice: l.price ?? 0, lotId: l.lotId })),
           initialPayment,
           initialPaymentFee: feeEdit ? feeOverride ?? 0 : undefined,
           costs: costs.filter((c) => (c.amount ?? 0) > 0).map((c) => ({ category: c.category, amount: c.amount ?? 0 })),
@@ -270,7 +285,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
                 }
               >
                 <div className="stack">
-                  <button type="button" className="btn block" style={{ justifyContent: 'space-between' }} disabled={!current} onClick={() => setPicking(i)}>
+                  <button type="button" className="btn block" style={{ justifyContent: 'space-between' }} disabled={!current} onClick={() => setPicking(i)} data-tour="sa-product">
                     <span className="ellipsis">{l.product?.name ?? 'Elegir producto…'}</span>
                     <Icon name="chevron" size={18} />
                   </button>
@@ -279,7 +294,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
                       {TRACKING_LABEL[l.product.tracking]} · Disponibles: {s?.available ?? '…'}
                     </span>
                   ) : null}
-                  <div className="grid-2">
+                  <div className="grid-2" data-tour="sa-qty-price">
                     <Field label="Cantidad" htmlFor={`sa-q-${i}`}>
                       <IntInput id={`sa-q-${i}`} value={l.unitIds.length || l.qty} onChange={(v) => setLine(i, { qty: v, unitIds: [] })} />
                     </Field>
@@ -287,10 +302,14 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
                       <MoneyInput id={`sa-p-${i}`} value={l.price} onChange={(v) => setLine(i, { price: v })} />
                     </Field>
                   </div>
+                  {l.product && !isUnit && l.product.costing === 'lots' ? (
+                    <LotSelect id={`sa-lot-${i}`} productId={l.product.id} value={l.lotId} onChange={(v) => setLine(i, { lotId: v })} />
+                  ) : null}
                   {l.product ? (
                     <PriceHints
                       productId={l.product.id}
                       unitId={isUnit ? (l.unitIds[0] ?? s?.unitIds[0] ?? null) : null}
+                      lotId={l.lotId}
                       several={isUnit && qtyOf(l) > 1}
                       price={l.price}
                       onUse={(v) => setLine(i, { price: v })}
@@ -327,7 +346,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
             <MoneyInput id="sa-disc" value={discount} onChange={setDiscount} />
           </Field>
 
-          <Field label="Pago">
+          <Field label="Pago" tour="sa-pay">
             <Segmented label="Estado del pago" value={payMode} onChange={setPayMode} options={[['full', 'Pagado completo'], ['partial', 'Parcial'], ['pending', 'Pendiente']]} />
           </Field>
           {payMode === 'partial' ? (
@@ -430,7 +449,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
           </Card>
           {localError ? <Notice kind="bad">{localError}</Notice> : null}
           <FormError error={act.error} />
-          <button className="btn primary block" disabled={act.busy}>
+          <button className="btn primary block" disabled={act.busy} data-tour="sa-submit">
             Revisar y registrar venta
           </button>
         </form>
@@ -442,7 +461,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
           mode="sale"
           onClose={() => setPicking(null)}
           onPick={(p) => {
-            setLine(picking, { product: p, unitIds: [], qty: 1, price: p.salePrice ?? lines[picking].price });
+            setLine(picking, { product: p, unitIds: [], qty: 1, lotId: null, price: p.salePrice ?? lines[picking].price });
             setPicking(null);
           }}
         />
@@ -537,7 +556,7 @@ export function SaleDetailScreen({ id }: { id: ID }) {
       danger: true,
       message: (
         <p>
-          Usa esto solo si la venta se registró por error. Se conservará marcada como anulada, lo vendido vuelve a existencia y deja de contar en ingresos, costos y cobros. Para una devolución real del cliente, use "Registrar devolución".
+          Usa esto solo si la venta se registró por error. Se conservará marcada como anulada, lo vendido vuelve a existencia y deja de contar en ingresos, costos y cobros. Para una devolución real del cliente, usa "Registrar devolución".
         </p>
       ),
       input: { label: 'Motivo', required: true },
@@ -976,8 +995,8 @@ function FeeBox({ method, pct, fee, edit, onEdit, value, onChange }: { method: s
 }
 
 /** Ayuda de precio al vender: costo, mínimo, mercado, tu precio real, sugerido y avisos. */
-function PriceHints({ productId, unitId, several, price, onUse }: { productId: ID; unitId: ID | null; several: boolean; price: number | null; onUse: (v: number) => void }) {
-  const info = useLive((d) => (unitId ? getUnitPricing(d, unitId) : getProductPricing(d, productId)), [productId, unitId]);
+function PriceHints({ productId, unitId, lotId, several, price, onUse }: { productId: ID; unitId: ID | null; lotId: ID | null; several: boolean; price: number | null; onUse: (v: number) => void }) {
+  const info = useLive((d) => (unitId ? getUnitPricing(d, unitId) : getProductPricing(d, productId, new Date(), lotId)), [productId, unitId, lotId]);
   if (!info) return null;
   const chk = price !== null ? checkPrice(price, info) : null;
   const parts: string[] = [];
@@ -993,13 +1012,18 @@ function PriceHints({ productId, unitId, several, price, onUse }: { productId: I
           {several ? ' (primer equipo)' : ''}
         </p>
       ) : null}
+      {info.lots && new Set(info.lots.map((x) => x.unitCost)).size > 1 ? (
+        <p className="tiny muted" data-testid="lot-hints">
+          Por lote: {info.lots.map((x) => `${x.qty} a ${x.unitCost === null ? 'sin costo' : formatCOP(x.unitCost)} (mín. ${x.minPrice === null ? '—' : formatCOP(x.minPrice)})`).join(' · ')}
+        </p>
+      ) : null}
       {info.suggested !== null && info.suggested !== price ? (
         <button type="button" className="btn sm" onClick={() => onUse(info.suggested!)}>
           Usar sugerido: {formatCOP(info.suggested)}
         </button>
       ) : null}
       {chk?.belowCost ? (
-        <Notice kind="bad">Este precio está por debajo del costo: perderías {formatCOP(-(chk.profit ?? 0))} por equipo.</Notice>
+        <Notice kind="bad">Este precio está por debajo del costo: perderías {formatCOP(-(chk.profit ?? 0))} por {unitId ? 'equipo' : 'unidad'}.</Notice>
       ) : chk?.belowMin ? (
         <Notice kind="warn">Este precio está por debajo de tu mínimo ({formatCOP(info.minPrice)}). Ganarías {formatCOP(chk.profit)}.</Notice>
       ) : null}
