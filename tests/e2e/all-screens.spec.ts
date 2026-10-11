@@ -153,6 +153,11 @@ test('todas las pantallas cargan sin errores (con datos de ejemplo)', async ({ p
     '/aprende/lotes',
     '/ayuda/lotes',
     '/ayuda/gastos-personales',
+    // v2.2
+    '/apariencia',
+    '/ayuda/apariencia',
+    '/ayuda/voz',
+    '/ayuda/sonidos',
   ];
   let helpOpened = 0;
   for (const r of routes) {

@@ -12,6 +12,7 @@ import { CalculatorScreen, MarketPricesScreen } from './screens/Pricing';
 import { SummaryScreen } from './screens/Summary';
 import { PersonalScreen } from './screens/Personal';
 import { LearnScreen, LessonScreen } from './screens/Learn';
+import { AppearanceScreen } from './screens/Appearance';
 import { CatalogScreen } from './screens/Catalog';
 import { HomeScreen } from './screens/Home';
 import { HistoryScreen, InventoriesScreen, InventoryDetailScreen } from './screens/Inventories';
@@ -88,6 +89,8 @@ function resolve(seg: string[], q: URLSearchParams): ReactNode {
       return b ? <HelpArticleScreen id={b} /> : <HelpScreen />;
     case 'personal':
       return <PersonalScreen />;
+    case 'apariencia':
+      return <AppearanceScreen />;
     case 'aprende':
       return b ? <LessonScreen id={b} /> : <LearnScreen />;
   }
@@ -119,6 +122,7 @@ const SIDE: { href: string; label: string; icon: string; key: string }[] = [
   { href: '/catalogo', label: 'Catálogo', icon: 'book', key: 'catalogo' },
   { href: '/buscar', label: 'Buscar', icon: 'search', key: 'buscar' },
   { href: '/respaldo', label: 'Respaldo', icon: 'download', key: 'respaldo' },
+  { href: '/apariencia', label: 'Apariencia y sonido', icon: 'palette', key: 'apariencia' },
   { href: '/ajustes', label: 'Configuración', icon: 'sliders', key: 'ajustes' },
   { href: '/aprende', label: 'Aprende de negocios', icon: 'star', key: 'aprende' },
   { href: '/ayuda', label: 'Ayuda', icon: 'help', key: 'ayuda' },
@@ -146,7 +150,9 @@ export function App() {
     <div className={`app${practice ? ' practice' : ''}`}>
       <PracticeBanner />
       <nav className="side-nav" aria-label="Secciones">
-        <div className="brand">Inventario Móvil</div>
+        <div className="brand">
+          <img src="./icons/icon.svg" alt="" width="30" height="30" className="brand-logo" /> Inventario Móvil
+        </div>
         <button className="btn primary" style={{ marginBottom: 10 }} onClick={() => setQuick(true)} data-tour="quick">
           <Icon name="plus" /> Registrar
         </button>

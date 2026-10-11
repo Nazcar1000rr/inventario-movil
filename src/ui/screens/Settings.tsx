@@ -4,10 +4,10 @@ import { maskImei, PAYMENT_METHODS, UnitStatusBadge } from '../components/common
 import { L } from '../components/help';
 import { Icon } from '../components/Icon';
 import { Card, confirmAction, Empty, Field, FormError, IntInput, KV, ListItem, Loading, MoneyInput, Notice, Page, Segmented, TextInput } from '../components/ui';
-import { getStorageStatus, isNative, platformName, requestPersistence, type StorageStatus } from '../platform';
+import { getStorageStatus, isIOS, isNative, platformName, requestPersistence, type StorageStatus } from '../platform';
 import { useRoute } from '../router';
 import { db, useAction, useLive } from '../store';
-import { playSound, setSoundOn, setVolume, SOUNDS, useSoundPrefs } from '../sound';
+import { canIgnoreSilentSwitch, PACKS, playSound, setIgnoreSilent, setPack, setSoundOn, setToneOverride, setVolume, SOUNDS, useSoundPrefs, type PackId } from '../sound';
 
 declare const __APP_VERSION__: string;
 
@@ -29,6 +29,7 @@ export function MoreScreen() {
     ['/buscar', 'Buscar', 'search', 'Código, IMEI, serial, modelo…'],
     ['/historial', 'Historial general', 'history'],
     ['/respaldo', 'Respaldo y restauración', 'download', 'Exportar, importar, deshacer'],
+    ['/apariencia', 'Apariencia, sonidos y voz', 'palette', 'Colores, animaciones, tonos y lectura en voz alta'],
     ['/ajustes', 'Configuración', 'sliders'],
     ['/ayuda', 'Ayuda', 'help', 'Manual, primeros pasos, modo práctica y novedades'],
   ];
@@ -241,7 +242,11 @@ function SettingsForm({ initial }: { initial: Settings }) {
         </div>
       </form>
 
-      <SoundsCard />
+      <Card flush>
+        <ul className="list">
+          <ListItem href="/apariencia" icon="palette" title="Apariencia, sonidos y voz" sub="Colores, modo oscuro, animaciones, tonos y lectura en voz alta" />
+        </ul>
+      </Card>
 
       <Card title="Privacidad y almacenamiento">
         <div className="stack">
@@ -302,29 +307,72 @@ function SettingsForm({ initial }: { initial: Settings }) {
   );
 }
 
-/** Sonidos: cada uno se activa o desactiva por separado (se guarda al instante, solo en este teléfono). */
-function SoundsCard() {
+/** Sonidos: paquete, tono e interruptor por sonido, volumen y modo silencio del iPhone (se guarda al instante, solo en este teléfono). */
+export function SoundsCard() {
   const prefs = useSoundPrefs();
+  const packName = (id: PackId) => PACKS.find((p) => p.id === id)?.label ?? id;
+  const showSilent = isIOS() || canIgnoreSilentSwitch();
   return (
     <Card title="Sonidos">
       <div className="stack" data-testid="sounds-card">
-        <p className="small muted">Actívalos o desactívalos uno por uno. Toca ▶ para escucharlos. Se guarda al instante.</p>
+        <Field label="Paquete de sonidos" hint={PACKS.find((p) => p.id === prefs.pack)?.hint}>
+          <div className="chips" role="group" aria-label="Paquete de sonidos" data-sound="none">
+            {PACKS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="chip"
+                aria-pressed={prefs.pack === p.id}
+                data-testid={`pack-${p.id}`}
+                onClick={() => {
+                  setPack(p.id);
+                  playSound('sale', { pack: p.id, force: true });
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <p className="small muted">Activa o desactiva cada sonido por separado y, si quieres, elige otro tono para cada uno. Toca ▶ para escucharlo. Se guarda al instante.</p>
         <ul className="list">
           {SOUNDS.map((x) => (
             <li key={x.id}>
-              <div className="item" style={{ cursor: 'default' }}>
-                <label className="check grow" style={{ alignItems: 'flex-start' }}>
-                  <input type="checkbox" checked={prefs.on[x.id]} onChange={(e) => setSoundOn(x.id, e.target.checked)} data-testid={`sound-${x.id}`} data-sound="none" />
-                  <span>
-                    <span className="strong" style={{ display: 'block' }}>
-                      {x.label}
+              <div className="sound-row">
+                <div className="sound-head">
+                  <label className="check grow" style={{ alignItems: 'flex-start' }}>
+                    <input type="checkbox" checked={prefs.on[x.id]} onChange={(e) => setSoundOn(x.id, e.target.checked)} data-testid={`sound-${x.id}`} data-sound="none" />
+                    <span>
+                      <span className="strong" style={{ display: 'block' }}>
+                        {x.label}
+                      </span>
+                      <span className="tiny muted">{x.hint}</span>
                     </span>
-                    <span className="tiny muted">{x.hint}</span>
-                  </span>
-                </label>
-                <button type="button" className="icon-btn" aria-label={`Escuchar: ${x.label}`} data-sound="none" disabled={!prefs.on[x.id]} onClick={() => playSound(x.id)}>
-                  <Icon name="play" />
-                </button>
+                  </label>
+                  <button type="button" className="icon-btn" aria-label={`Escuchar: ${x.label}`} data-sound="none" disabled={!prefs.on[x.id]} onClick={() => playSound(x.id)}>
+                    <Icon name="play" />
+                  </button>
+                </div>
+                {prefs.on[x.id] ? (
+                  <select
+                    className="select sound-tone"
+                    aria-label={`Tono de: ${x.label}`}
+                    data-testid={`tone-${x.id}`}
+                    value={prefs.tone[x.id] ?? ''}
+                    onChange={(e) => {
+                      const v = (e.target.value || null) as PackId | null;
+                      setToneOverride(x.id, v);
+                      playSound(x.id, { pack: v ?? prefs.pack });
+                    }}
+                  >
+                    <option value="">Tono del paquete ({packName(prefs.pack)})</option>
+                    {PACKS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
               </div>
             </li>
           ))}
@@ -332,7 +380,20 @@ function SoundsCard() {
         <Field label={`Volumen: ${Math.round(prefs.volume * 100)} %`} htmlFor="snd-vol">
           <input id="snd-vol" type="range" min={0} max={100} step={10} value={Math.round(prefs.volume * 100)} onChange={(e) => setVolume(Number(e.target.value) / 100)} onPointerUp={() => playSound('success')} />
         </Field>
-        <p className="tiny muted">En iPhone, si el teléfono está en silencio es posible que no suenen.</p>
+        {showSilent ? (
+          <div className="stack-sm">
+            <label className="check">
+              <input type="checkbox" checked={prefs.ignoreSilent} disabled={!canIgnoreSilentSwitch()} onChange={(e) => setIgnoreSilent(e.target.checked)} data-testid="ignore-silent" /> Sonar aunque el iPhone esté en silencio
+            </label>
+            <p className="tiny muted">
+              {canIgnoreSilentSwitch()
+                ? 'También aplica a la lectura en voz alta. Si estás escuchando música en otra app, puede pausarse o bajar mientras suena la app.'
+                : 'Esta opción necesita iOS 17 o superior. Con el iPhone en silencio, los sonidos no se oyen.'}
+            </p>
+          </div>
+        ) : (
+          <p className="tiny muted">En Android los sonidos usan el volumen multimedia: se oyen aunque el teléfono esté en silencio o vibración, si ese volumen está arriba.</p>
+        )}
       </div>
     </Card>
   );

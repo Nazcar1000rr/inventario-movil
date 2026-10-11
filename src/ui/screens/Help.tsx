@@ -3,7 +3,9 @@ import { compareVersions, errorMessage, getSettings, updateSettings } from '../.
 import { Progress } from '../components/Chart';
 import { Icon } from '../components/Icon';
 import { Card, confirmAction, Empty, ListItem, Loading, Notice, Page, Sheet, TextInput } from '../components/ui';
-import { ARTICLES, CATEGORIES, CHANGELOG, findArticle, METRICS, searchArticles, type Article, type Block } from '../help/content';
+import { ARTICLES, articleText, CATEGORIES, CHANGELOG, findArticle, METRICS, searchArticles, type Article, type Block } from '../help/content';
+import { SpeakerToggle } from '../components/speaker';
+import { useAutoSpeak } from '../speech';
 import { isNative, shareBinary } from '../platform';
 import { ToursCard } from './Learn';
 import { navigate } from '../router';
@@ -103,12 +105,18 @@ export function HelpScreen() {
 export function HelpArticleScreen({ id }: { id: string }) {
   if (id === 'manual') return <ManualScreen />;
   if (id === 'novedades') return <NewsScreen />;
+  return <ArticleScreen id={id} />;
+}
+
+function ArticleScreen({ id }: { id: string }) {
   const a = findArticle(id);
+  const text = a ? articleText(a) : null;
+  useAutoSpeak(text);
   if (!a) return <Page title="Ayuda" back="/ayuda"><Empty title="Ese tema no existe" /></Page>;
   const idx = ARTICLES.indexOf(a);
   const next = ARTICLES[idx + 1];
   return (
-    <Page title={a.title} subtitle={a.category} back="/ayuda">
+    <Page title={a.title} subtitle={a.category} back="/ayuda" actions={<SpeakerToggle text={text ?? ''} />}>
       <Card>
         <ArticleBody a={a} />
       </Card>

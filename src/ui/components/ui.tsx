@@ -364,12 +364,15 @@ export function Sheet({
   children,
   footer,
   full,
+  headAction,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   full?: boolean;
+  /** Botón extra en la cabecera (p. ej. la bocina de lectura en voz alta). */
+  headAction?: ReactNode;
 }) {
   const id = useId();
   const closeRef = useRef(onClose);
@@ -404,6 +407,7 @@ export function Sheet({
       <div ref={boxRef} className={`sheet${full ? ' full' : ''}`} role="dialog" aria-modal="true" aria-labelledby={id}>
         <div className="sheet-head">
           <h2 id={id}>{title}</h2>
+          {headAction}
           <button className="icon-btn" type="button" aria-label="Cerrar" onClick={onClose}>
             <Icon name="x" />
           </button>

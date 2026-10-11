@@ -335,7 +335,7 @@ export const ARTICLES: Article[] = [
     to: '/aprende',
     toLabel: 'Aprende de negocios',
     blocks: [
-      { p: 'Los recorridos guiados resaltan partes reales de la app y te explican para qué sirven, paso a paso: Conoce la app, Tu primera compra, Tu primera venta y Entiende tu capital. Los encuentras en Ayuda y en Aprende de negocios.' },
+      { p: 'Los recorridos guiados resaltan partes reales de la app y te explican para qué sirven, paso a paso: Conoce la app, Tu primera compra, Tu primera venta y Entiende tu capital. Los encuentras en Ayuda y en Aprende de negocios. Cada paso se lee en voz alta (lo silencias con la bocina 🔊).' },
       { p: '"Aprende de negocios" tiene 10 lecciones cortas: costo y precio, margen, ganancia bruta y neta, caja, capital, rotación, gastos hormiga y sueldo, precios, proveedores y lotes. Cada una trae un ejemplo, una calculadora para probar con tus números y 3 preguntas.' },
       { tip: 'Tu avance se guarda en este teléfono.' },
     ],
@@ -344,14 +344,45 @@ export const ARTICLES: Article[] = [
     id: 'sonidos',
     title: 'Sonidos',
     category: 'Configuración',
-    keywords: 'sonido sonidos audio volumen silencio clic venta',
-    summary: 'Activa o desactiva cada sonido por separado y ajusta el volumen.',
-    to: '/ajustes',
-    toLabel: 'Ir a Configuración',
+    keywords: 'sonido sonidos audio volumen silencio clic venta paquete tono caja registradora burbujas retro cristal madera iphone silencio',
+    summary: 'Paquetes de tonos, un tono distinto para cada sonido, volumen y sonar con el iPhone en silencio.',
+    to: '/apariencia',
+    toLabel: 'Apariencia, sonidos y voz',
     blocks: [
-      { p: 'La app hace sonidos suaves al tocar botones, cambiar de sección, abrir ventanas, guardar, registrar una venta o una compra, cuando hay un error y al completar logros.' },
-      { p: 'En Configuración → Sonidos activas o desactivas cada uno por separado (toca ▶ para escucharlo) y ajustas el volumen. Se guarda al instante, solo en este teléfono.' },
-      { tip: 'En iPhone, si el teléfono está en silencio, es posible que no suenen.' },
+      { p: 'La app hace sonidos al tocar botones, cambiar de sección, abrir ventanas, guardar, registrar una venta o una compra, cuando hay un error y al completar logros.' },
+      { list: ['Paquete de sonidos: Suave, Caja registradora, Burbujas, Retro, Cristal o Madera. Al tocar uno lo escuchas.', 'Cada sonido se activa o desactiva por separado y puede tener otro tono (por ejemplo, la venta con caja registradora y los toques con burbujas). Toca ▶ para escucharlo.', 'Volumen general.'] },
+      { p: 'En iPhone puedes activar "Sonar aunque el iPhone esté en silencio" (necesita iOS 17 o superior). También aplica a la lectura en voz alta. Si estás escuchando música en otra app, puede pausarse o bajar mientras suena la app.' },
+      { tip: 'En Android los sonidos usan el volumen multimedia: se oyen aunque el teléfono esté en silencio o vibración, si ese volumen está arriba.' },
+    ],
+  },
+  {
+    id: 'apariencia',
+    title: 'Colores, modo oscuro y animaciones',
+    category: 'Configuración',
+    keywords: 'color colores tema modo oscuro claro degradado sólido animaciones modo lite batería azul morado coral rosado grafito verde',
+    summary: 'Elige claro u oscuro, el color principal, sólido o degradado, y animaciones completas o modo lite.',
+    to: '/apariencia',
+    toLabel: 'Apariencia, sonidos y voz',
+    blocks: [
+      { list: ['Modo: Automático (como el teléfono), Claro u Oscuro.', 'Color principal: Verde, Azul, Morado, Coral, Rosado o Grafito.', 'Estilo de color: Sólido o Degradado (encabezados, botones principales y barras con degradado).', 'Animaciones: Completas (transiciones entre pantallas, ventanas que suben, botones que responden al tocarlos y confeti en los logros) o Modo lite (sin animaciones: más rápido y ahorra batería).'] },
+      { p: 'Los cambios se ven al instante y se guardan solo en este teléfono. El ícono de la app en la pantalla de inicio no cambia de color.' },
+      { tip: 'Si tu teléfono tiene activado "reducir movimiento", el modo lite empieza prendido.' },
+    ],
+  },
+  {
+    id: 'voz',
+    title: 'Lectura en voz alta',
+    category: 'Configuración',
+    keywords: 'voz leer lectura en voz alta bocina altavoz silenciar mute escuchar narrador velocidad',
+    summary: 'La app lee en voz alta los recorridos, las explicaciones ⓘ, la ayuda y las lecciones. Se silencia con la bocina.',
+    to: '/apariencia',
+    toLabel: 'Apariencia, sonidos y voz',
+    blocks: [
+      { p: 'Mientras haces un recorrido, abres una explicación ⓘ o la ayuda "?", lees un tema del manual o haces una lección (con sus preguntas y respuestas), la app te lo lee en voz alta.' },
+      { p: 'Toca la bocina 🔊 para silenciarla: cambia a 🔇. Tócala otra vez para que vuelva a leer. El silencio vale para toda la app hasta que lo quites.' },
+      { p: 'Los consejos (consejo del día y consejos de gastos personales) tienen un botón "Escuchar".' },
+      { p: 'En Apariencia, sonidos y voz eliges la voz, la velocidad y puedes escuchar un ejemplo.' },
+      { tip: 'Usa las voces en español que trae tu teléfono, sin internet: la app no envía el texto a ningún lado. En Android, si no hay voz en español, toca "Instalar voces".' },
     ],
   },
 
@@ -576,7 +607,8 @@ export const ARTICLES: Article[] = [
     to: '/ajustes',
     toLabel: 'Ir a Configuración',
     blocks: [
-      { list: ['Negocio: nombre, modalidad por defecto y prefijos de códigos internos.', 'Estancado: activar o apagar los avisos y los días para nuevos y usados/restaurados.', 'Precios: margen mínimo, margen deseado, gastos esperados por equipo, descuentos por batería y por pieza genérica, días para precio desactualizado y para "tu precio real".', 'Comisiones por medio de pago.', 'Recordatorio de respaldo y aviso de garantías.'] },
+      { list: ['Negocio: nombre, modalidad por defecto y prefijos de códigos internos.', 'Estancado: activar o apagar los avisos y los días para nuevos y usados/restaurados.', 'Precios: margen mínimo, margen deseado, gastos esperados por equipo, descuentos por batería y por pieza genérica, días para precio desactualizado y para "tu precio real".', 'Comisiones por medio de pago.', 'Inventario y consejos: lotes por defecto, consejos de gastos personales y consejo del día.', 'Recordatorio de respaldo y aviso de garantías.'] },
+      { p: 'Los colores, el modo oscuro, las animaciones, los sonidos y la voz están en Más → Apariencia, sonidos y voz.' },
     ],
   },
   {
@@ -609,6 +641,14 @@ function norm(s: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '');
+}
+
+/** Texto de un artículo para leerlo en voz alta. */
+export function articleText(a: Pick<Article, 'title' | 'blocks'>): string {
+  return [a.title + '.', ...a.blocks.map((b) => {
+    const t = blockText(b);
+    return /[.!?:]$/.test(t) ? t : t + '.';
+  })].join(' ');
 }
 
 function blockText(b: Block): string {
@@ -781,10 +821,11 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
   views: { title: 'Vistas consolidadas', intro: 'Varios inventarios juntos sin duplicar nada.', articles: ['vistas'] },
   catalog: { title: 'Catálogo', intro: 'Modelos disponibles al crear productos. Puedes agregar marcas y modelos.', articles: ['productos'] },
   backup: { title: 'Respaldo', intro: 'Crea una copia de todo o restaura una. Importar reemplaza todos los datos.', articles: ['respaldo', 'privacidad'] },
-  settings: { title: 'Configuración', intro: 'Ajustes del negocio, estancado, precios, comisiones, lotes, consejos y sonidos.', articles: ['configuracion', 'lotes', 'sonidos', 'comisiones'] },
+  settings: { title: 'Configuración', intro: 'Ajustes del negocio, estancado, precios, comisiones, lotes y consejos. Los colores, sonidos y la voz están en "Apariencia, sonidos y voz".', articles: ['configuracion', 'lotes', 'apariencia', 'comisiones'] },
   more: { title: 'Más', intro: 'Todas las secciones de la app.', articles: ['empezar', 'recorridos'] },
   personal: { title: 'Gastos personales', intro: 'Los gustos y gastos hormiga que pagas con plata del negocio, comparados con lo que el negocio gana en el mes.', articles: ['gastos-personales', 'aportes'] },
-  learn: { title: 'Aprende de negocios', intro: 'Lecciones cortas con ejemplos, calculadoras y preguntas, y recorridos guiados por la app.', articles: ['recorridos', 'empezar'] },
+  learn: { title: 'Aprende de negocios', intro: 'Lecciones cortas con ejemplos, calculadoras y preguntas, y recorridos guiados por la app.', articles: ['recorridos', 'voz', 'empezar'] },
+  appearance: { title: 'Apariencia, sonidos y voz', intro: 'Colores, modo oscuro, degradados, animaciones o modo lite, paquetes de sonidos y lectura en voz alta.', articles: ['apariencia', 'sonidos', 'voz'] },
 };
 
 /* ---------------- Novedades ---------------- */
@@ -796,6 +837,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.2.0',
+    title: 'Novedades de la versión 2.2',
+    items: [
+      { title: 'Logo nuevo', text: 'La "i" de Inventario: un celular con barras que suben y una moneda.' },
+      { title: 'Colores y modo oscuro', text: 'Elige Verde, Azul, Morado, Coral, Rosado o Grafito, modo claro u oscuro, y estilo sólido o con degradados.', to: '/apariencia' },
+      { title: 'Animaciones y modo lite', text: 'Transiciones, ventanas que suben y confeti en los logros. El modo lite las quita.', to: '/apariencia' },
+      { title: 'Lectura en voz alta', text: 'Los recorridos, las explicaciones ⓘ, la ayuda y las lecciones se leen en voz alta. Silénciala con la bocina 🔊.', to: '/ayuda/voz' },
+      { title: 'Más sonidos', text: 'Paquetes Suave, Caja registradora, Burbujas, Retro, Cristal y Madera, y un tono distinto para cada sonido.', to: '/apariencia' },
+      { title: 'Sonar en silencio (iPhone)', text: 'Opción para que los sonidos y la voz suenen aunque el iPhone esté en silencio.', to: '/apariencia' },
+    ],
+  },
   {
     version: '2.1.0',
     title: 'Novedades de la versión 2.1',

@@ -1,6 +1,6 @@
 # Inventario Móvil
 
-App en español para llevar el inventario de un negocio de teléfonos (sobre todo iPhone), audífonos y accesorios: compras, ventas, pagos, devoluciones, gastos, proveedores, compradores, garantías, **capital, deudas y precios**, con **lotes por precio de compra**, **gastos personales** y **lecciones de negocios** para quien está empezando. Calcula la rentabilidad, cuánto vale y cuánto crece el negocio, y cuánto tarda cada producto en venderse. Trabaja con pesos colombianos (COP).
+App en español para llevar el inventario de un negocio de teléfonos (sobre todo iPhone), audífonos y accesorios: compras, ventas, pagos, devoluciones, gastos, proveedores, compradores, garantías, **capital, deudas y precios**, con **lotes por precio de compra**, **gastos personales**, **lecciones de negocios** para quien está empezando, **lectura en voz alta**, **colores a elegir** y **sonidos**. Calcula la rentabilidad, cuánto vale y cuánto crece el negocio, y cuánto tarda cada producto en venderse. Trabaja con pesos colombianos (COP).
 
 - **iPhone:** se instala como app web (PWA) desde Safari, sin App Store.
 - **Android:** se instala con un archivo APK, sin Google Play.
@@ -9,7 +9,8 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 **Instalar o actualizar:**
 - **iPhone:** abre <https://nazcar1000rr.github.io/inventario-movil/> en Safari → Compartir → *Añadir a pantalla de inicio*. Si ya la tienes, ábrela con internet y toca *Actualizar ahora*.
 - **Android:** descarga <https://github.com/Nazcar1000rr/inventario-movil/releases/latest/download/inventario-movil.apk> e instálalo (para actualizar, instálalo encima, sin desinstalar).
-- **Al actualizar (de la v1 o la v2 a la 2.1) tus datos se convierten solos.** Igual, haz un respaldo antes de actualizar.
+- **Al actualizar (de la v1 o la v2 a la 2.2) tus datos se convierten solos.** Igual, haz un respaldo antes de actualizar.
+- **Logo nuevo (2.2):** en Android cambia al instalar el APK encima. En iPhone, el ícono de la pantalla de inicio normalmente no se actualiza solo; para verlo hay que quitar y volver a agregar la app, y eso borra sus datos: haz un respaldo antes e impórtalo después.
 
 > Guía de instalación: **[docs/INSTALACION.md](docs/INSTALACION.md)** · Manual de uso: **[docs/Manual-Inventario-Movil.pdf](docs/Manual-Inventario-Movil.pdf)** (también dentro de la app, en Más → Ayuda)
 > Arquitectura, modelo de datos y fórmulas: **[docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)** · Pruebas y resultados reales: **[docs/PRUEBAS.md](docs/PRUEBAS.md)**
@@ -20,9 +21,9 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 
 | Elemento | Estado |
 |---|---|
-| Código fuente completo (PWA + proyecto Android), versión 2.1.0 | ✅ Terminado |
-| Lógica de negocio y base de datos local | ✅ 85 pruebas automáticas, todas aprobadas |
-| Interfaz | ✅ 21 pruebas de extremo a extremo en Chromium, todas aprobadas |
+| Código fuente completo (PWA + proyecto Android), versión 2.2.0 | ✅ Terminado |
+| Lógica de negocio y base de datos local | ✅ 88 pruebas automáticas, todas aprobadas |
+| Interfaz | ✅ 24 pruebas de extremo a extremo en Chromium, todas aprobadas |
 | Conversión automática de los datos de la v1 | ✅ Probada con una base real de la v1 (en la capa de datos y en el navegador) y con respaldos de la v1 |
 | Conversión automática de los datos de la v2 (lotes) | ✅ Probada con una base real de la v2 y con respaldos de la v2 (en la capa de datos, con el mismo código Dexie de la app) |
 | PWA publicada en HTTPS | ✅ Versión 2.1.0 publicada con GitHub Pages (comprobado que la dirección sirve la compilación nueva, versión 294f42f1cf55). Se republica en cada cambio |
@@ -70,7 +71,9 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 **Ayuda**
 - Lista de **primeros pasos**, botón **?** en cada pantalla, **ⓘ** en cada número con su fórmula, **manual con buscador** y "Llévame ahí", **modo práctica** con datos de ejemplo en una base aparte, **novedades** después de actualizar y **manual en PDF**.
 - **Recorridos guiados** sobre las pantallas reales y **Aprende de negocios**: 10 lecciones con ejemplos, calculadoras y preguntas. **Consejo del día** en Inicio.
-- **Sonidos** suaves, cada uno se activa o desactiva por separado.
+- **Lectura en voz alta** de recorridos, explicaciones ⓘ, ayuda y lecciones (con sus preguntas), con bocina 🔊/🔇 para silenciar; voz y velocidad a elegir. Usa las voces del teléfono, sin internet.
+- **Sonidos** en 6 paquetes (Suave, Caja registradora, Burbujas, Retro, Cristal, Madera), con tono propio y interruptor por sonido, y opción de sonar con el iPhone en silencio (iOS 17 o superior).
+- **Apariencia:** modo claro/oscuro/automático, 6 colores, estilo sólido o con degradados, animaciones y **modo lite** sin animaciones.
 - Tono cercano (tú) en toda la app.
 
 **Respaldo:** formato propio con suma SHA-256 y **cifrado AES-256 opcional**, menú nativo para compartir, importación verificada en una base temporal, reemplazo atómico y **deshacer**. Los respaldos de la v1 se convierten al importarlos.
@@ -87,6 +90,7 @@ npm run build          # compilación de producción en dist/ (incluye sw.js)
 npm run preview        # servir dist/ en http://localhost:4173
 npx playwright test    # pruebas de extremo a extremo (requiere build previo y Chromium de Playwright)
 node scripts/make-manual-pdf.mjs  # regenerar el manual en PDF (con preview corriendo)
+node scripts/make-icons.mjs        # regenerar íconos y splash desde el logo (requiere sharp)
 npm run android:sync   # compilar y copiar la app al proyecto Android
 npm run android:apk    # compilar el APK (requiere Android SDK y android/keystore.properties)
 ```
@@ -107,7 +111,9 @@ src/ui/              Interfaz React (pantallas, componentes, navegación)
   help/content.ts    Manual, explicaciones de métricas, ayuda por pantalla, novedades y consejos
   help/lessons.ts    Lecciones de "Aprende de negocios"
   tour.tsx           Recorridos guiados
-  sound.ts           Sonidos (Web Audio)
+  sound.ts           Sonidos y paquetes de tonos (Web Audio)
+  speech.ts          Lectura en voz alta (Web Speech / motor de voz de Android)
+  theme.ts           Colores, modo oscuro, degradados y animaciones
   practice.ts        Datos de ejemplo del modo práctica
   summary-render.ts  Imagen y PDF del resumen mensual
 src/main.tsx         Arranque, service worker y botón Atrás de Android
@@ -129,5 +135,6 @@ docs/                Instalación, arquitectura, pruebas, manual y capturas
 - **No implementado:** escaneo o generación de QR/códigos de barras, impresión de etiquetas, estado "reservado", combinar dos respaldos (la importación siempre reemplaza, con opción de deshacer), convertir un producto de "por cantidad" a "por unidad", y saldo a favor del dueño (cuando el negocio te debe a ti; regístralo como aporte).
 - Los importes de una compra o venta no se editan: se anula y se registra de nuevo para que todo quede trazable.
 - La batería del iPhone se ingresa a mano: la app no la lee del equipo.
-- El avance de los recorridos y las lecciones y las preferencias de sonido se guardan solo en el teléfono (no van en el respaldo). En iPhone, con el teléfono en silencio es posible que los sonidos no suenen.
+- El avance de los recorridos y las lecciones y las preferencias de apariencia, sonido y voz se guardan solo en el teléfono (no van en el respaldo).
+- La voz depende de las voces en español que tenga el teléfono: si no hay ninguna que funcione sin internet, la lectura en voz alta no aparece.
 - Los lotes son para productos por cantidad; los teléfonos ya guardan el costo de cada unidad.

@@ -53,6 +53,7 @@ test('21. diseño adaptable: sin desbordes horizontales en 8 tamaños de pantall
     ['personal', '/personal'],
     ['aprende', '/aprende'],
     ['leccion', '/aprende/lotes'],
+    ['apariencia', '/apariencia'],
   ];
   for (const [vname, w, h] of VIEWPORTS) {
     await page.setViewportSize({ width: w, height: h });

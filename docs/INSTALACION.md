@@ -21,13 +21,16 @@ Ambas se publican solas con GitHub Actions cada vez que se sube un cambio al rep
 
 Necesita iOS 15.4 o superior; se recomienda iOS 17 o superior.
 
-### Actualizar (por ejemplo, de la v2 a la 2.1)
+### Actualizar (por ejemplo, a la 2.2)
 
 1. **Antes:** en la app, Más → Respaldo → Preparar respaldo → guárdalo fuera del teléfono.
 2. Abre la app con internet. Aparece "Hay una versión nueva de la app": toca **Actualizar ahora**.
 3. Verás "¡Novedades!". Tus datos se convierten solos a la versión nueva y se conservan.
 
 ### Cosas importantes en iPhone
+
+- **Logo nuevo (versión 2.2):** iOS guarda el ícono cuando agregas la app a la pantalla de inicio y normalmente no lo cambia después. Para ver el logo nuevo: Respaldo → Preparar respaldo y guárdalo fuera del teléfono → quita la app de la pantalla de inicio → vuelve a agregarla desde Safari → Respaldo → Elegir archivo de respaldo. Si no te importa el ícono, no hace falta: todo lo demás se actualiza solo.
+- **Voz y sonidos en silencio:** en Más → Apariencia, sonidos y voz puedes activar "Sonar aunque el iPhone esté en silencio" (iOS 17 o superior).
 
 - **Usa solo la app instalada.** Si usas la página en una pestaña de Safari, iOS puede borrar sus datos tras 7 días sin uso, y los datos de Safari y los de la app instalada están separados. Si registraste algo en Safari, pásalo con *Respaldo* (preparar en Safari, importar en la app).
 - **Quitar el icono de la pantalla de inicio borra los datos de la app.** Haz un respaldo antes.
@@ -52,7 +55,7 @@ Si algún día quieres publicarla en otro lugar: en el repositorio, **Settings �
 
 Necesita Android 7.0 o superior, con *Android System WebView* o Chrome actualizado (versión 90 o superior).
 
-### Actualizar (por ejemplo, de la v2 a la 2.1)
+### Actualizar (por ejemplo, a la 2.2)
 
 1. **Antes:** Más → Respaldo → Preparar respaldo → guárdalo fuera del teléfono (o "Guardar en Documentos").
 2. Instala el APK nuevo **encima** del anterior, **sin desinstalar**. Los datos se conservan porque la firma es la misma.
@@ -122,7 +125,7 @@ Para cada versión nueva, aumenta `VERSION_CODE` (por ejemplo, `VERSION_CODE=2 .
 3. En el teléfono de destino: **Más → Respaldo → Elegir archivo de respaldo**. Revisa el resumen y confirma.
 
 Ten en cuenta:
-- Funciona entre iPhone y Android en cualquier dirección: el formato es el mismo. Un respaldo de la v1 o de la v2 se puede importar en la 2.1 (se convierte solo). Un respaldo de la 2.1 no se puede importar en una app más vieja: actualiza primero los dos teléfonos.
+- Funciona entre iPhone y Android en cualquier dirección: el formato es el mismo. Un respaldo de la v1 o de la v2 se puede importar en la 2.1 o 2.2 (se convierte solo). Un respaldo de la 2.1 o 2.2 no se puede importar en una app de la v2 o anterior: actualiza primero los dos teléfonos.
 - **No es una sincronización.** Después de importar, cada teléfono sigue cambiando por separado.
 - Si el teléfono de destino ya tiene datos, la importación los **reemplaza**. Se pide escribir REEMPLAZAR y se guarda una copia interna para **deshacer**.
 - No se combinan dos instalaciones, para evitar duplicar existencias o dinero.

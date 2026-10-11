@@ -21,6 +21,7 @@ import { MONEY_TIPS, pickTip } from '../help/content';
 import { navigate } from '../router';
 import { db, useAction, useLive } from '../store';
 import { playSound } from '../sound';
+import { ListenButton } from '../components/speaker';
 
 /* ================= Formulario de gasto personal ================= */
 
@@ -117,9 +118,12 @@ export function PersonalImpactBox({ amount, date, tag }: { amount: number; date:
       {st.personalSpendingTips !== false ? (
         <div className="tip-card" data-testid="money-tip">
           <span className="tip-icon">💡</span>
-          <div>
+          <div className="stack-sm">
             <p className="small strong">La plata del negocio es del negocio</p>
             <p className="small">{tip}</p>
+            <div>
+              <ListenButton text={`La plata del negocio es del negocio. ${tip}`} />
+            </div>
           </div>
         </div>
       ) : null}

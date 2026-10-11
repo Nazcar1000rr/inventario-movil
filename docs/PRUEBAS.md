@@ -1,13 +1,28 @@
 # Pruebas: lo ejecutado y lo pendiente
 
-Fecha de ejecución: 10 de octubre de 2026 (versión 2.1.0).
+Fecha de ejecución: 10 de octubre de 2026 (versión 2.2.0).
 
 Entorno:
 - Linux con Node 22.22.
 - Vitest 5.0.3 + fake-indexeddb 6.2.5: implementación de IndexedDB conforme al estándar, sobre la que corre el mismo código Dexie de la app.
 - Playwright 1.56 con Chromium 141 (compilación 1194), contra la **compilación de producción** (`npm run build` + `vite preview`).
 
-**Resultado: 85/85 pruebas de lógica (3 corridas seguidas sin fallos) y 21/21 pruebas de extremo a extremo aprobadas.** `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+**Resultado: 88/88 pruebas de lógica y 24/24 pruebas de extremo a extremo aprobadas.** `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+
+## Versión 2.2: qué se probó
+
+| Tema | Cómo se verificó | Resultado |
+|---|---|---|
+| Colores y modo | E2E: Azul cambia el color principal (#1d5fbf); Oscuro lo cambia a su versión oscura (#6ea1f0); Degradado pone degradado en el encabezado; todo se recuerda al recargar; Rosado en claro actualiza la barra del sistema (theme-color) | ✅ (Chromium) |
+| Contraste de los 6 colores | Cálculo WCAG de texto sobre botón, enlaces sobre el fondo y chips, en claro y oscuro, y sobre los degradados: todos ≥ 4,5:1 (se ajustaron Verde degradado y Coral) | ✅ |
+| Animaciones y modo lite | E2E: con animaciones, las tarjetas entran con animación; en modo lite, ninguna | ✅ (Chromium) |
+| Lectura en voz alta | E2E con una voz simulada (Chromium no trae voces): lee el paso del recorrido, la bocina silencia (🔇) y no lee el paso siguiente, al reactivarla lee el paso actual; lee la explicación ⓘ, la lección y la pregunta cuando queda a la vista; las cifras se leen sin separadores; el ejemplo de Configuración | ✅ (Chromium, voz simulada) |
+| Texto para la voz | Pesos, porcentajes, símbolos (÷ × → ▼ −), "Ej.", comillas y emojis; frases largas partidas sin perder texto | ✅ |
+| Paquetes de sonidos | Los 6 paquetes definen los 8 sonidos; E2E: elegir Retro suena "venta" en Retro; tono de venta Caja registradora; se recuerdan al recargar | ✅ |
+| Sonar con el iPhone en silencio | E2E simulando la API de sesión de audio de iOS: la opción pone el tipo "playback" (y "auto" al quitarla) y se recuerda | ✅ (simulado) |
+| Logo | Íconos de la PWA, adaptable de Android y splash generados y revisados a la vista | ✅ |
+
+**No probado aquí:** la voz real (iPhone y motor de voz de Android), el sonido real con el interruptor de silencio del iPhone y el logo en la pantalla de inicio de un teléfono. Ver la lista de verificación.
 
 ## Versión 2.1: qué se probó
 
@@ -91,7 +106,8 @@ Las 24 pruebas obligatorias de la v1 (inventarios y modos, compras, ventas, stoc
 | APK en un teléfono Android (botón Atrás, compartir nativo de imagen/PDF, selector de archivos, cámara, márgenes) | El APK se compila y firma en GitHub Actions, pero no hay un teléfono para instalarlo | Lista de abajo |
 | Actualización real v1 → v2 en un teléfono | Probada con la base real de la v1 en Chromium y en la capa de datos; no en un teléfono con datos reales | Hacer un respaldo antes de actualizar (lista, paso 1) |
 | Actualización v2 → v2.1 en el navegador | Probada en la capa de datos (fake-indexeddb con el mismo código Dexie); no se repitió en Chromium ni en un teléfono | Hacer un respaldo antes de actualizar |
-| Sonidos reales | En Chromium se comprobó qué sonido se dispara, no cómo se oye; en iPhone el modo silencio puede callarlos | Configuración → Sonidos → ▶ en cada uno |
+| Sonidos reales y modo silencio del iPhone | En Chromium se comprobó qué sonido se dispara y la opción de la sesión de audio (simulada), no cómo se oye | Apariencia, sonidos y voz → ▶ en cada uno, con y sin silencio |
+| Voz real | Chromium no trae voces; se probó con una voz simulada. En Android usa un plugin nativo que solo se compila en GitHub Actions | Apariencia, sonidos y voz → Escuchar un ejemplo; hacer un recorrido |
 | Transferencia real entre un iPhone y un Android | Requiere dos dispositivos físicos | Lista de abajo |
 
 ## Lista de verificación en dispositivos físicos (≈ 20 minutos por teléfono)
@@ -108,15 +124,16 @@ Las 24 pruebas obligatorias de la v1 (inventarios y modos, compras, ventas, stoc
 10. **Sin conexión:** modo avión, reabrir y registrar una venta.
 11. **Entre teléfonos:** exportar en uno, importar en el otro y comprobar los totales.
 12. Android: el botón Atrás cierra diálogos, vuelve atrás y en Inicio sale de la app.
-13. **v2.1:** compra unos audífonos a dos precios distintos y mira los lotes en la ficha; registra el pasaje en "Gasto del viaje de compras"; registra un gasto personal; haz el recorrido "Conoce la app"; en Configuración → Sonidos toca ▶ en cada sonido y apaga uno.
+13. **v2.1:** compra unos audífonos a dos precios distintos y mira los lotes en la ficha; registra el pasaje en "Gasto del viaje de compras"; registra un gasto personal; haz el recorrido "Conoce la app"; en Apariencia, sonidos y voz toca ▶ en cada sonido y apaga uno.
+14. **v2.2:** Más → Apariencia, sonidos y voz: prueba los colores, el modo oscuro, el degradado y el modo lite; toca "Escuchar un ejemplo" (si no hay voz en español, en Android toca "Instalar voces"); haz el recorrido "Conoce la app" y silencia con la bocina; en iPhone activa "Sonar aunque el iPhone esté en silencio" y prueba con el interruptor de silencio.
 
 ## Cómo volver a ejecutar las pruebas
 
 ```bash
 npm ci
-npm test                     # 85 pruebas de lógica (~5 s)
+npm test                     # 88 pruebas de lógica (~5 s)
 npm run build
-npx playwright test          # 21 pruebas E2E (~6 min). Requiere el navegador Chromium de Playwright
+npx playwright test          # 24 pruebas E2E (~7 min). Requiere el navegador Chromium de Playwright
 ```
 
 Para regenerar el manual en PDF (después de cambiar la ayuda): `npm run build`, `npm run preview` en otra terminal y `node scripts/make-manual-pdf.mjs`; luego `npm run build` otra vez.

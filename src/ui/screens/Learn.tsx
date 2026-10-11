@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { antProjection, formatCOP } from '../../core';
 import { Progress } from '../components/Chart';
 import { Icon } from '../components/Icon';
@@ -9,6 +9,10 @@ import { playSound } from '../sound';
 import { getPref, setPref } from '../store';
 import { isTourDone, startTour, TOURS } from '../tour';
 import { ArticleBody } from './Help';
+import { articleText } from '../help/content';
+import { SpeakerToggle } from '../components/speaker';
+import { useAutoSpeak } from '../speech';
+import { celebrate } from '../theme';
 
 /* ================= Progreso ================= */
 
@@ -87,6 +91,8 @@ export function LearnScreen() {
 
 export function LessonScreen({ id }: { id: string }) {
   const lesson = findLesson(id);
+  const text = lesson ? articleText({ title: lesson.title, blocks: lesson.blocks }) : null;
+  useAutoSpeak(text);
   if (!lesson)
     return (
       <Page title="Aprende" back="/aprende">
@@ -96,7 +102,7 @@ export function LessonScreen({ id }: { id: string }) {
   const idx = LESSONS.indexOf(lesson);
   const next = LESSONS[idx + 1];
   return (
-    <Page title={lesson.title} subtitle={`Lección ${idx + 1} de ${LESSONS.length} · ${lesson.minutes} min`} back="/aprende">
+    <Page title={lesson.title} subtitle={`Lección ${idx + 1} de ${LESSONS.length} · ${lesson.minutes} min`} back="/aprende" actions={<SpeakerToggle text={text ?? ''} />}>
       <Card>
         <ArticleBody a={{ id: lesson.id, title: lesson.title, category: '', keywords: '', summary: '', blocks: lesson.blocks }} />
       </Card>
@@ -130,6 +136,27 @@ function Quiz({ lesson }: { lesson: Lesson }) {
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
   const q = lesson.quiz[i];
+  // Se lee cuando las preguntas quedan a la vista (y cada pregunta y respuesta después)
+  const box = useRef<HTMLDivElement>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || seen || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) {
+        setSeen(true);
+        io.disconnect();
+      }
+    }, { threshold: 0.5 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [seen]);
+  const quizText = finished
+    ? `${score} de ${lesson.quiz.length} correctas. ${score === lesson.quiz.length ? '¡Muy bien!' : 'Repasa la lección y vuelve a intentarlo cuando quieras.'}`
+    : chosen === null
+      ? `Pregunta ${i + 1}. ${q.q} ${q.options.map((o, k) => `Opción ${k + 1}: ${o}.`).join(' ')}`
+      : `${chosen === q.answer ? '¡Correcto!' : 'No exactamente.'} ${q.explain}`;
+  useAutoSpeak(quizText, seen);
   const restart = () => {
     setI(0);
     setChosen(null);
@@ -139,8 +166,8 @@ function Quiz({ lesson }: { lesson: Lesson }) {
   if (finished) {
     const perfect = score === lesson.quiz.length;
     return (
-      <Card title={<h2>✅ Ponte a prueba</h2>}>
-        <div className="stack-sm" data-testid="quiz-result">
+      <Card title={<h2>✅ Ponte a prueba</h2>} action={<SpeakerToggle text={quizText} />}>
+        <div className="stack-sm" data-testid="quiz-result" ref={box}>
           <p className="strong">
             {score} de {lesson.quiz.length} correctas. {perfect ? '¡Muy bien!' : 'Repasa la lección y vuelve a intentarlo cuando quieras.'}
           </p>
@@ -153,8 +180,8 @@ function Quiz({ lesson }: { lesson: Lesson }) {
     );
   }
   return (
-    <Card title={<h2>✅ Ponte a prueba</h2>}>
-      <div className="stack-sm" data-testid="quiz">
+    <Card title={<h2>✅ Ponte a prueba</h2>} action={<SpeakerToggle text={quizText} />}>
+      <div className="stack-sm" data-testid="quiz" ref={box}>
         <p className="tiny muted">
           Pregunta {i + 1} de {lesson.quiz.length}
         </p>
@@ -200,6 +227,7 @@ function Quiz({ lesson }: { lesson: Lesson }) {
                   setFinished(true);
                   if (!isLessonDone(lesson.id)) setPref(`learn:${lesson.id}`, 'done');
                   playSound('achievement');
+                  celebrate();
                 }
               }}
             >

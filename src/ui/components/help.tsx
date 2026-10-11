@@ -3,6 +3,19 @@ import { findArticle, METRICS, SCREEN_HELP } from '../help/content';
 import { navigate } from '../router';
 import { Icon } from './Icon';
 import { Sheet } from './ui';
+import { SpeakerToggle } from './speaker';
+import { useAutoSpeak } from '../speech';
+import type { MetricHelp } from '../help/content';
+
+function metricText(m: MetricHelp): string {
+  return [`${m.title}.`, m.what, m.formula ? `Cómo se calcula: ${m.formula}.` : '', m.note ?? ''].filter(Boolean).join(' ');
+}
+
+/** Lee el texto en voz alta mientras el componente está a la vista. */
+export function AutoSpeak({ text }: { text: string }) {
+  useAutoSpeak(text);
+  return null;
+}
 
 /** Botón ⓘ que explica qué significa un número y cómo se calcula. */
 export function InfoTip({ k, label }: { k: string; label?: string }) {
@@ -24,7 +37,8 @@ export function InfoTip({ k, label }: { k: string; label?: string }) {
         <Icon name="info" size={15} />
       </button>
       {open ? (
-        <Sheet title={m.title} onClose={() => setOpen(false)}>
+        <Sheet title={m.title} onClose={() => setOpen(false)} headAction={<SpeakerToggle text={metricText(m)} />}>
+          <AutoSpeak text={metricText(m)} />
           <div className="stack">
             <p>{m.what}</p>
             {m.formula ? (
@@ -61,7 +75,8 @@ export function HelpButton({ helpKey }: { helpKey: string }) {
         <Icon name="help" />
       </button>
       {open ? (
-        <Sheet title={`Ayuda · ${h.title}`} onClose={() => setOpen(false)}>
+        <Sheet title={`Ayuda · ${h.title}`} onClose={() => setOpen(false)} headAction={<SpeakerToggle text={`${h.title}. ${h.intro}`} />}>
+          <AutoSpeak text={`${h.title}. ${h.intro}`} />
           <div className="stack">
             <p>{h.intro}</p>
             <div className="stack-sm">

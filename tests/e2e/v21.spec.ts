@@ -167,7 +167,7 @@ test('v2.1 · recorrido guiado, lecciones con preguntas y consejo del día', asy
 });
 
 test('v2.1 · sonidos: cada uno se apaga por separado y se recuerda', async ({ page }) => {
-  await page.goto('/#/ajustes');
+  await page.goto('/#/apariencia');
   await expect(page.getByTestId('sounds-card')).toBeVisible();
   await page.getByTestId('sound-tap').uncheck();
   await page.locator('#snd-vol').focus();

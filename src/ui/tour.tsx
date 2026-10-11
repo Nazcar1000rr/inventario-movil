@@ -2,6 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { navigate, useRoute } from './router';
 import { playSound } from './sound';
 import { getPref, setPref } from './store';
+import { stopSpeaking, useAutoSpeak } from './speech';
+import { celebrate } from './theme';
+import { SpeakerToggle } from './components/speaker';
 
 /**
  * RECORRIDOS GUIADOS (v2.1): resaltan partes reales de la app, paso a paso, y explican para qué sirven.
@@ -111,7 +114,9 @@ export function endTour(completed: boolean): void {
   if (active && completed) {
     setPref(`tour:${active.tour.id}`, 'done');
     playSound('achievement');
+    celebrate();
   }
+  stopSpeaking();
   active = null;
   emit();
 }
@@ -159,6 +164,8 @@ export function TourHost() {
   const cardRef = useRef<HTMLDivElement>(null);
   const [cardH, setCardH] = useState(180);
   const step = st ? st.tour.steps[st.step] : null;
+  const spoken = step ? `${step.title}. ${step.text}` : '';
+  useAutoSpeak(spoken, !!step);
 
   // Ir a la pantalla del paso
   useEffect(() => {
@@ -240,7 +247,7 @@ export function TourHost() {
       ) : (
         block({ top: 0, left: 0, width: vw, height: vh }, 'all')
       )}
-      <div ref={cardRef} className="tour-card" style={{ top: cardTop, left: cardLeft, width: cardW }}>
+      <div ref={cardRef} key={`${tour.id}-${st.step}`} className="tour-card" style={{ top: cardTop, left: cardLeft, width: cardW }}>
         <p className="tiny muted">
           {tour.title} · paso {st.step + 1} de {tour.steps.length}
         </p>
@@ -257,6 +264,7 @@ export function TourHost() {
           <button type="button" className="btn sm" onClick={() => endTour(false)}>
             Salir
           </button>
+          <SpeakerToggle text={spoken} />
           <span className="grow" />
           {st.step > 0 ? (
             <button type="button" className="btn sm" onClick={() => go(st.step - 1)}>

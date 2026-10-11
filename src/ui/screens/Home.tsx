@@ -24,6 +24,7 @@ import { navigate } from '../router';
 import { db, getPref, setPref, useAction, useLive } from '../store';
 import { DAILY_TIPS, pickTip } from '../help/content';
 import { isTourDone, startTour } from '../tour';
+import { ListenButton } from '../components/speaker';
 
 export function Kpi({
   label,
@@ -193,6 +194,7 @@ function DailyTipCard() {
         <p className="small strong">{tip.title}</p>
         <p className="small">{tip.text}</p>
         <div className="tip-actions">
+          <ListenButton text={`Consejo del día. ${tip.title}. ${tip.text}`} />
           {tip.to ? (
             <a className="btn sm" href={`#${tip.to}`}>
               {tip.toLabel ?? 'Ver más'}
