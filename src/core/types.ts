@@ -185,6 +185,8 @@ export interface Lot {
   costKnown: boolean;
   notes: string;
   createdAt: ISODate;
+  /** v2.3: última corrección de cantidad o costo. */
+  correctedAt?: ISODate | null;
 }
 
 /** De qué lotes salió una venta (para anularla o calcular días exactos). */
@@ -243,6 +245,8 @@ export interface Purchase {
   voidedAt: ISODate | null;
   voidReason: string;
   createdAt: ISODate;
+  /** v2.3: última corrección de cantidades o valores. */
+  correctedAt?: ISODate | null;
 }
 
 export interface PurchaseLine {
@@ -275,6 +279,12 @@ export interface Sale {
   voidedAt: ISODate | null;
   voidReason: string;
   createdAt: ISODate;
+  /** v2.3: fecha en que el cliente prometió pagar (fiado). */
+  dueDate?: ISODate | null;
+  /** v2.3: saldo que perdonaste ("no me va a pagar"): se registra como pérdida. */
+  forgiven?: Money;
+  forgivenAt?: ISODate | null;
+  forgiveNote?: string;
 }
 
 export interface SaleLine {
@@ -395,6 +405,8 @@ export interface Movement {
   refType: string;
   refId: ID | null;
   notes: string;
+  /** v2.3: movimiento agregado por una corrección (no es una operación nueva). */
+  correction?: boolean;
 }
 
 export type WarrantyType = 'customer' | 'supplier';
@@ -490,7 +502,10 @@ export interface HistoryEntry {
     | 'capital'
     | 'debt'
     | 'price'
-    | 'goal';
+    | 'goal'
+    | 'expectation'
+    | 'note'
+    | 'credit';
   entityId: ID;
   inventoryId: ID | null;
   action: string;
@@ -628,6 +643,122 @@ export interface Goal {
   dueDate: ISODate | null;
   status: 'active' | 'archived';
   createdAt: ISODate;
+}
+
+/* ---------------- Expectativas (v2.3) ---------------- */
+
+export type ExpectationPeriod = 'month' | 'week';
+
+/**
+ * Lo que esperas lograr en un mes o una semana. Solo se guarda cuando la editas: si no hay registro, la app
+ * propone una automáticamente con tus resultados anteriores a ese periodo.
+ */
+export interface Expectation {
+  id: ID;
+  period: ExpectationPeriod;
+  /** Inicio del periodo (día 1 o lunes, 00:00 hora local) y fin (exclusivo). */
+  start: ISODate;
+  end: ISODate;
+  /** null = todo el negocio. */
+  inventoryId: ID | null;
+  expectedProfit: Money;
+  expectedRevenue: Money;
+  expectedUnits: number;
+  notes: string;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+/* ---------------- Preguntones (v2.3) ---------------- */
+
+/**
+ * Una persona que preguntó y no compró (un toque en el botón "Preguntón").
+ * Si después vuelve y compra, se marca como "bought": deja de contar como preguntón porque su compra ya cuenta como venta.
+ */
+export interface Inquiry {
+  id: ID;
+  /** null = general (todo el negocio). */
+  inventoryId: ID | null;
+  /** Cuándo preguntó (el momento del toque). */
+  date: ISODate;
+  /** Qué preguntó (opcional). */
+  productId: ID | null;
+  status: 'open' | 'bought';
+  boughtAt: ISODate | null;
+  notes: string;
+  createdAt: ISODate;
+}
+
+/* ---------------- Me deben (v2.3) ---------------- */
+
+/**
+ * Plata que te deben sin ser una venta registrada:
+ * - loan: le prestaste plata (sale de la caja);
+ * - opening: ya te debía antes de usar la app (cuenta como capital aportado, igual que la mercancía que ya tenías).
+ * Lo que fías en mercancía se registra como una venta con pago pendiente.
+ */
+export interface Credit {
+  id: ID;
+  opId: string;
+  inventoryId: ID | null;
+  customerId: ID;
+  kind: 'loan' | 'opening';
+  amount: Money;
+  date: ISODate;
+  dueDate: ISODate | null;
+  notes: string;
+  forgiven: Money;
+  forgivenAt: ISODate | null;
+  status: OpStatus;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export interface CreditPayment {
+  id: ID;
+  opId: string;
+  creditId: ID;
+  customerId: ID;
+  inventoryId: ID | null;
+  date: ISODate;
+  amount: Money;
+  method: string;
+  notes: string;
+  createdAt: ISODate;
+}
+
+/* ---------------- Calendario (v2.3) ---------------- */
+
+/** Una nota del calendario con sus avisos. */
+export interface CalendarNote {
+  id: ID;
+  title: string;
+  /** Opcional. */
+  description: string;
+  /** Día de la nota en hora local: AAAA-MM-DD. */
+  day: string;
+  /** Hora opcional (HH:MM). */
+  time: string | null;
+  /** Cuántos días antes te avisa (0 = el mismo día). */
+  remindDays: number[];
+  /** Hora de los avisos (HH:MM). */
+  remindTime: string;
+  done: boolean;
+  doneAt: ISODate | null;
+  /** Avisos que ya viste dentro de la app (días antes). */
+  seen: number[];
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+/** Nota libre (sección Notas, v2.3): sin fecha; se puede pasar al calendario. */
+export interface Memo {
+  id: ID;
+  title: string;
+  text: string;
+  pinned: boolean;
+  createdAt: ISODate;
+  updatedAt: ISODate;
 }
 
 export interface MetaRecord {

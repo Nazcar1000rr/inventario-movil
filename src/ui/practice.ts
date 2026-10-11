@@ -1,5 +1,12 @@
 import {
   addCapitalMovement,
+  addInquiry,
+  markInquiryBought,
+  saveMemo,
+  saveNote,
+  dayKey,
+  createCredit,
+  payDebtor,
   addMarketPrice,
   addPersonalSpending,
   addTripCost,
@@ -119,6 +126,20 @@ export async function seedPracticeData(db: AppDB): Promise<void> {
   await addMarketPrice(db, { model: 'iPhone 14 Pro', capacity: '256 GB', condition: 'Restaurado', price: 3_500_000, date: ago(40) });
   await addMarketPrice(db, { model: 'iPhone 11', capacity: '64 GB', condition: 'Usado', price: 950_000, date: ago(25) });
 
+  // v2.3: preguntones de las últimas semanas (uno volvió y compró) y notas del calendario
+  const asks: [number, number][] = [[1, 10], [1, 16], [2, 11], [3, 19], [5, 12], [6, 17], [8, 15], [9, 10], [9, 18], [12, 14], [15, 11], [16, 20], [20, 16], [22, 13]];
+  for (const [d, h] of asks) await addInquiry(db, { opId: op(), inventoryId: inv.id, date: ago(d, h), productId: d % 3 === 0 ? buds.id : d % 3 === 1 ? charger.id : null });
+  await markInquiryBought(db, { opId: op(), inventoryId: inv.id, date: ago(1, 18) });
+  // Me deben: una venta fiada con abono y fecha vencida, y plata prestada
+  const carlos = await createCustomer(db, { name: 'Carlos Gómez', phone: '3109876543' });
+  await createSale(db, { opId: op(), inventoryId: inv.id, customerId: carlos.id, date: ago(18), lines: [{ productId: buds.id, quantity: 2, unitPrice: 45_000 }], initialPayment: 0, dueDate: ago(4) });
+  await payDebtor(db, { opId: op(), key: carlos.id, amount: 30_000, date: ago(9), method: 'Nequi' });
+  await createCredit(db, { opId: op(), customerId: carlos.id, kind: 'loan', amount: 50_000, date: ago(6), dueDate: new Date(Date.now() + 10 * 86_400_000).toISOString(), notes: 'Para el pasaje', inventoryId: inv.id });
+  const inDays = (n: number) => dayKey(new Date(Date.now() + n * 86_400_000));
+  await saveNote(db, { opId: op(), title: 'Pagar la tarjeta Visa', description: 'Cuota del mes', day: inDays(4), remindDays: [3, 1, 0], remindTime: '08:00' });
+  await saveNote(db, { opId: op(), title: 'Pedido al proveedor', day: inDays(9), time: '10:00', remindDays: [1] });
+  await saveMemo(db, { opId: op(), title: 'Pedido de Andrés', text: 'Funda MagSafe para 13 Pro\nVidrio templado\nCargador de 20 W', pinned: true });
+  await saveMemo(db, { opId: op(), text: 'Ideas: publicar los AirPods en Marketplace con foto de la caja y video probándolos.' });
   await saveGoal(db, { name: 'Llegar a 12 millones', metric: 'business_value', target: 12_000_000, dueDate: new Date(Date.now() + 90 * 86_400_000).toISOString(), inventoryId: inv.id });
   await db.meta.put({ key: 'practiceSeeded', value: new Date().toISOString() });
 }

@@ -1,16 +1,22 @@
 import Dexie, { type Table } from 'dexie';
 import { buildLotsFromHistory } from './lots';
 import type {
+  CalendarNote,
   CapitalMovement,
   CatalogModel,
   ConsolidatedView,
   Counter,
+  Credit,
+  CreditPayment,
   Customer,
   Debt,
   DebtPayment,
+  Expectation,
   Expense,
   Goal,
+  Memo,
   HistoryEntry,
+  Inquiry,
   Inventory,
   Lot,
   MarketPrice,
@@ -33,7 +39,7 @@ import type {
 } from './types';
 
 /** Versión del esquema de datos. Debe coincidir con la última `version()` declarada abajo. */
-export const DB_SCHEMA_VERSION = 3;
+export const DB_SCHEMA_VERSION = 4;
 export const DB_NAME = 'inventario-movil';
 
 /**
@@ -87,6 +93,17 @@ export const SCHEMA_V3: Record<string, string> = {
   lots: 'id, productId, inventoryId, purchaseId, date',
 };
 
+/** v4 (app 2.3): expectativas del mes y de la semana, preguntones, calendario, fiados (me deben) y notas. */
+export const SCHEMA_V4: Record<string, string> = {
+  ...SCHEMA_V3,
+  expectations: 'id, start, period, inventoryId',
+  inquiries: 'id, date, inventoryId, status, productId',
+  notes: 'id, day, done',
+  credits: 'id, &opId, customerId, inventoryId, date, status',
+  creditPayments: 'id, &opId, creditId, customerId, date',
+  memos: 'id, updatedAt, pinned',
+};
+
 /** Tablas que existían en la versión 1 (para validar respaldos antiguos). */
 export const TABLES_V1 = [
   'meta',
@@ -116,6 +133,9 @@ export const TABLES_V1 = [
 
 /** Tablas de la versión 2 (app 2.0). */
 export const TABLES_V2 = [...TABLES_V1, 'capital', 'debts', 'debtPayments', 'marketPrices', 'goals'] as const;
+
+/** Tablas de la versión 3 (app 2.1 y 2.2). */
+export const TABLES_V3 = [...TABLES_V2, 'lots'] as const;
 
 /** Tablas de datos de negocio (todas se incluyen en el respaldo). */
 export const DATA_TABLES = [
@@ -148,6 +168,12 @@ export const DATA_TABLES = [
   'marketPrices',
   'goals',
   'lots',
+  'expectations',
+  'inquiries',
+  'notes',
+  'credits',
+  'creditPayments',
+  'memos',
 ] as const;
 
 export type TableName = (typeof DATA_TABLES)[number];
@@ -182,6 +208,12 @@ export class AppDB extends Dexie {
   marketPrices!: Table<MarketPrice, string>;
   goals!: Table<Goal, string>;
   lots!: Table<Lot, string>;
+  expectations!: Table<Expectation, string>;
+  inquiries!: Table<Inquiry, string>;
+  notes!: Table<CalendarNote, string>;
+  credits!: Table<Credit, string>;
+  creditPayments!: Table<CreditPayment, string>;
+  memos!: Table<Memo, string>;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -219,6 +251,8 @@ export class AppDB extends Dexie {
         await tx.table('products').toCollection().modify((p: Record<string, unknown>) => upgradeProductV3(p));
         if (lots.length) await tx.table('lots').bulkAdd(lots);
       });
+    // v4 (app 2.3): tablas nuevas de expectativas (vacía: las automáticas se calculan, no se guardan) de preguntones y del calendario.
+    this.version(4).stores(SCHEMA_V4);
   }
 
   /** Todas las tablas de negocio, para transacciones globales (respaldo/restauración). */

@@ -1,6 +1,8 @@
 import type { AppDB } from '../db';
 import type {
   CapitalKind,
+  Credit,
+  CreditPayment,
   CapitalMovement,
   Debt,
   DebtPayment,
@@ -161,14 +163,17 @@ export interface CapitalData {
   debtPayments: DebtPayment[];
   units: Unit[];
   products: Product[];
+  /** v2.3: fiados sueltos (me deben) y sus abonos. */
+  credits: Credit[];
+  creditPayments: CreditPayment[];
 }
 
 export async function loadCapitalData(db: AppDB): Promise<CapitalData> {
   return db.transaction(
     'r',
-    [db.capital, db.purchases, db.sales, db.payments, db.returns, db.expenses, db.movements, db.debts, db.debtPayments, db.units, db.products],
+    [db.capital, db.purchases, db.sales, db.payments, db.returns, db.expenses, db.movements, db.debts, db.debtPayments, db.units, db.products, db.credits, db.creditPayments],
     async () => {
-      const [capital, purchases, sales, payments, returns, expenses, movements, debts, debtPayments, units, products] = await Promise.all([
+      const [capital, purchases, sales, payments, returns, expenses, movements, debts, debtPayments, units, products, credits, creditPayments] = await Promise.all([
         db.capital.toArray(),
         db.purchases.toArray(),
         db.sales.toArray(),
@@ -180,8 +185,10 @@ export async function loadCapitalData(db: AppDB): Promise<CapitalData> {
         db.debtPayments.toArray(),
         db.units.toArray(),
         db.products.toArray(),
+        db.credits.toArray(),
+        db.creditPayments.toArray(),
       ]);
-      return { capital, purchases, sales, payments, returns, expenses, movements, debts, debtPayments, units, products };
+      return { capital, purchases, sales, payments, returns, expenses, movements, debts, debtPayments, units, products, credits, creditPayments };
     },
   );
 }
@@ -198,6 +205,9 @@ export interface CashFlow {
   expenses: Money;
   debtIn: Money;
   debtPrincipalPaid: Money;
+  /** v2.3: plata que prestaste (fiados de plata) y abonos recibidos de fiados sueltos. */
+  lent: Money;
+  creditCollected: Money;
 }
 
 export interface CapitalSnapshot {
@@ -224,6 +234,8 @@ export interface CapitalSnapshot {
   cashAdjustments: Money;
   /** Mercancía encontrada en ajustes de inventario (entra sin costo de caja). */
   foundStock: Money;
+  /** v2.3: lo que ya te debían antes de usar la app (cuenta como capital aportado). */
+  receivablesContributed: Money;
 }
 
 type Scope = (id: ID | null | undefined) => boolean;
@@ -281,6 +293,8 @@ export function computeCapitalAt(data: CapitalData, end: ISODate | null, inScope
     expenses: 0,
     debtIn: 0,
     debtPrincipalPaid: 0,
+    lent: 0,
+    creditCollected: 0,
   };
   for (const c of data.capital) {
     if (c.status !== 'active' || !inScope(c.inventoryId) || !before(c.date)) continue;
@@ -311,6 +325,21 @@ export function computeCapitalAt(data: CapitalData, end: ISODate | null, inScope
     cf.debtPrincipalPaid += p.principal;
     debts -= p.principal;
   }
+  // Fiados sueltos (v2.3)
+  const activeCredits = new Map((data.credits ?? []).filter((c) => c.status === 'active' && inScope(c.inventoryId)).map((c) => [c.id, c]));
+  let creditReceivables = 0;
+  let receivablesContributed = 0;
+  for (const c of activeCredits.values()) {
+    if (!before(c.date)) continue;
+    if (c.kind === 'loan') cf.lent += c.amount;
+    else receivablesContributed += c.amount;
+    creditReceivables += c.amount - (c.forgivenAt && before(c.forgivenAt) ? c.forgiven : 0);
+  }
+  for (const p of data.creditPayments ?? []) {
+    if (!activeCredits.has(p.creditId) || !before(p.date) || !before(activeCredits.get(p.creditId)!.date)) continue;
+    cf.creditCollected += p.amount;
+    creditReceivables -= p.amount;
+  }
   const cash =
     cf.contributions -
     cf.withdrawals +
@@ -322,7 +351,9 @@ export function computeCapitalAt(data: CapitalData, end: ISODate | null, inScope
     cf.purchases -
     cf.expenses +
     cf.debtIn -
-    cf.debtPrincipalPaid;
+    cf.debtPrincipalPaid -
+    cf.lent +
+    cf.creditCollected;
 
   // Inventario según movimientos + costos capitalizados de unidades
   let inventory = 0;
@@ -353,13 +384,15 @@ export function computeCapitalAt(data: CapitalData, end: ISODate | null, inScope
     if (!inScope(s.inventoryId) || !before(s.date)) continue;
     const effective = s.total - (returnedBySale.get(s.id) ?? 0);
     const collected = collectedBySale.get(s.id) ?? 0;
-    receivables += Math.max(0, effective - collected);
+    const forgiven = s.forgiven && s.forgivenAt && before(s.forgivenAt) ? s.forgiven : 0;
+    receivables += Math.max(0, effective - collected - forgiven);
     customerCredit += Math.max(0, collected - effective);
   }
+  receivables += creditReceivables;
 
   const ownerLoans = cf.ownerLoansOut - cf.ownerLoansBack;
   const businessValue = cash + inventory + receivables + ownerLoans - debts - customerCredit;
-  const netCapital = cf.contributions - cf.withdrawals + goods;
+  const netCapital = cf.contributions - cf.withdrawals + goods + receivablesContributed;
   const growth = businessValue - netCapital;
   return {
     at: end,
@@ -380,6 +413,7 @@ export function computeCapitalAt(data: CapitalData, end: ISODate | null, inScope
     growthPct: netCapital > 0 ? growth / netCapital : null,
     cashAdjustments: cf.adjustments,
     foundStock: found,
+    receivablesContributed,
   };
 }
 

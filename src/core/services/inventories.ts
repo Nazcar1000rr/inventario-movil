@@ -162,6 +162,8 @@ export async function deleteInventoryPermanently(db: AppDB, id: ID, confirmName:
     await db.debts.bulkDelete(debtIds);
     await db.capital.where('inventoryId').equals(id).delete();
     await db.goals.where('inventoryId').equals(id).delete();
+    await db.expectations.where('inventoryId').equals(id).delete();
+    await db.inquiries.where('inventoryId').equals(id).delete();
     const views = await db.consolidatedViews.toArray();
     for (const v of views) {
       if (v.inventoryIds.includes(id))

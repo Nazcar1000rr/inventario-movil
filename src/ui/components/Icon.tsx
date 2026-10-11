@@ -10,6 +10,9 @@ const PATHS: Record<string, string> = {
   chevron: 'M9 18l6-6-6-6',
   check: 'M20 6L9 17l-5-5',
   x: 'M18 6L6 18M6 6l12 12',
+  chat: 'M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12zM10.2 9.6a2 2 0 1 1 2.6 1.9c-.5.2-.8.6-.8 1.1v.6M12 15.6h.01',
+  gauge: 'M4 17a8 8 0 1 1 16 0M12 17l4-5M3 17h2M19 17h2M12 7V9M6.3 10.3l1.4 1.4M17.7 10.3l-1.4 1.4',
+  pulse: 'M3 12h4l3-7 4 14 3-7h4',
   alert: 'M12 3l10 18H2L12 3zM12 10v4M12 17h.01',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
   phone: 'M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2',
@@ -56,6 +59,11 @@ const PATHS: Record<string, string> = {
   mute: 'M4 9h4l5-4v14l-5-4H4zM17 9l5 6M22 9l-5 6',
   palette: 'M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.2-2.2 1-2.2H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10zM7.5 11.5h.01M10 7.5h.01M15 7.5h.01M17 11h.01',
   sparkle: 'M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8',
+  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',
+  pin: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z',
+  note: 'M4 4h16v11l-5 5H4zM15 20v-5h5M8 9h8M8 13h5',
+  stop: 'M7 7h10v10H7z',
+  skip: 'M5 5l10 7-10 7zM19 5v14',
 };
 
 export type IconName = keyof typeof PATHS;

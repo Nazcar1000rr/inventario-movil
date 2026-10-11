@@ -256,7 +256,7 @@ export async function updatePurchaseInfo(
         }
       }
       const mvs = await db.movements.where('refId').equals(id).toArray();
-      for (const m of mvs) if (m.type === 'purchase') await db.movements.update(m.id, { at: date });
+      for (const m of mvs) if (m.type === 'purchase' || (m.type === 'void_purchase' && m.correction)) await db.movements.update(m.id, { at: date });
       await db.lots.where('purchaseId').equals(id).modify({ date });
       upd.date = date;
       if (p.debtId) {
@@ -295,7 +295,7 @@ export async function voidPurchase(db: AppDB, id: ID, reason: string): Promise<v
     if ((await db.expenses.where('purchaseId').equals(id).filter((e) => e.status === 'active' && !!e.costGroupId).count()) > 0)
       fail('has_costs', 'Esta compra tiene gastos agregados después. Anúlalos primero desde el detalle de la compra.');
     const lines = await db.purchaseLines.where('purchaseId').equals(id).toArray();
-    const purchaseMoves = (await db.movements.where('refId').equals(id).toArray()).filter((m) => m.type === 'purchase');
+    const purchaseMoves = (await db.movements.where('refId').equals(id).toArray()).filter((m) => m.type === 'purchase' && !m.correction);
     const minSeq = Math.min(...purchaseMoves.map((m) => m.seq));
     for (const l of lines) {
       const prod = (await db.products.get(l.productId))!;
@@ -315,7 +315,7 @@ export async function voidPurchase(db: AppDB, id: ID, reason: string): Promise<v
         const later = await db.movements
           .where('productId')
           .equals(prod.id)
-          .filter((m) => m.seq > minSeq && m.qtyDelta < 0)
+          .filter((m) => m.seq > minSeq && m.qtyDelta < 0 && !(m.correction && m.refId === id))
           .count();
         if (later > 0)
           fail('later_outflows', `No se puede anular: "${prod.name}" tuvo salidas después de esta compra. Registra un ajuste en su lugar.`);

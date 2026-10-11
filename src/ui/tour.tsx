@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { navigate, useRoute } from './router';
 import { playSound } from './sound';
-import { getPref, setPref } from './store';
+import { getPref, setPref, toast } from './store';
 import { stopSpeaking, useAutoSpeak } from './speech';
 import { celebrate } from './theme';
 import { SpeakerToggle } from './components/speaker';
+import { Icon } from './components/Icon';
 
 /**
  * RECORRIDOS GUIADOS (v2.1): resaltan partes reales de la app, paso a paso, y explican para qué sirven.
@@ -37,12 +38,13 @@ export const TOURS: Tour[] = [
     summary: 'Dónde está cada cosa: Inicio, el botón +, inventarios, operaciones y la ayuda.',
     minutes: 1,
     steps: [
-      { route: '/', title: '¡Hola! Te muestro la app', text: 'Es un recorrido de un minuto. Puedes salir cuando quieras y repetirlo desde Ayuda.' },
+      { route: '/', title: '¡Hola! Te muestro la app', text: 'Es un recorrido de un minuto. Puedes omitirlo cuando quieras con «Omitir» y repetirlo desde Ayuda → Recorridos guiados.' },
       { route: '/', target: 'kpis', title: 'Tu resumen', text: 'Aquí ves lo que vendiste, lo que ganaste y lo que te deben en el periodo elegido. Cambia el periodo arriba (hoy, semana, mes…).' },
       { route: '/', target: 'quick', title: 'El botón +', text: 'Desde aquí registras todo: ventas, compras, gastos (del negocio, del viaje o personales), stock que ya tenías y más.' },
       { route: '/', target: 'nav-inventarios', title: 'Inventarios', text: 'Tus productos y existencias. Toca un producto para ver sus unidades, sus lotes por precio y lo que has pagado por él.' },
       { route: '/', target: 'nav-operaciones', title: 'Operaciones', text: 'Todas tus ventas, compras y gastos, con lo que te deben por cobrar.' },
-      { route: '/', target: 'nav-mas', title: 'Más', text: 'Capital, deudas, gastos personales, informes, precios, respaldo, configuración y la ayuda.' },
+      { route: '/', target: 'nav-mas', title: 'Más', text: 'Todo lo demás, ordenado por categorías: análisis e informes, clientes y cobros (me deben, preguntones), compras, tu plata (capital, deudas, gastos personales), notas y calendario, la ayuda y la configuración.' },
+      { route: '/', target: 'home-inquiries', title: 'Preguntones', text: 'Cada vez que alguien te pregunte y no compre, toca «+1 Preguntón». Si vuelve y compra, toca «Me compró». Así sabes cuántas personas preguntan por cada venta.' },
       { route: '/', target: '[data-testid="help-btn"]', title: 'El botón ?', text: 'En cada pantalla te explica qué hace y te lleva al manual. Y donde veas ⓘ junto a un número, tócalo: te dice qué significa y cómo se calcula.' },
       { route: '/aprende', target: 'learn-list', title: 'Aprende de negocios', text: 'Lecciones cortas con ejemplos, calculadoras y preguntas: costo, margen, ganancia, caja, capital y más. Ideales si estás empezando.' },
       { title: '¡Listo!', text: 'Ya conoces lo básico. Te recomiendo el recorrido "Tu primera compra" y, si quieres practicar sin miedo, el Modo práctica en Ayuda.' },
@@ -93,13 +95,33 @@ export const TOURS: Tour[] = [
     ],
     finish: { label: 'Lección: caja no es ganancia', to: '/aprende/caja' },
   },
+  {
+    id: 'analysis',
+    title: 'Análisis del negocio',
+    summary: 'Salud del negocio, lo que esperas ganar, expectativas, tendencias, tiempo de venta, preguntones y calendario.',
+    minutes: 2,
+    steps: [
+      { route: '/analisis?tab=resumen', title: 'Análisis del negocio', text: 'Aquí ves cómo va tu negocio con gráficas y tablas exactas. Toca una barra para ver su valor y «Ver los números» para la tabla.' },
+      { route: '/analisis?tab=resumen', target: 'analysis-filters', title: 'Inventario y sección', text: 'Elige el inventario y la sección: resumen, lo que esperas ganar, expectativas, tendencias, productos, tiempo de venta, flujo de dinero, días y preguntones.' },
+      { route: '/analisis?tab=resumen', target: 'analysis-health', title: 'Salud del negocio', text: 'Un puntaje de 0 a 100 con cinco partes: margen, tendencia, rotación, plata quieta y deudas. Cada parte trae un consejo.' },
+      { route: '/analisis?tab=esperas', target: 'analysis-outlook', title: 'Lo que esperas ganar', text: 'Cuánto ganarías si vendes todo lo que tienes a tus precios, al ritmo de tus ventas y cuánto valdría tu negocio a futuro.' },
+      { route: '/analisis?tab=metas', target: 'analysis-exp-month', title: 'Expectativas', text: 'La app te propone cuánto esperar ganar este mes y esta semana (y la puedes cambiar). La rayita negra muestra a dónde llegarías al ritmo actual.' },
+      { route: '/analisis?tab=tendencias', target: 'analysis-trends', title: 'Tendencias', text: 'Tus últimos 12 meses o 12 semanas. Elige qué ver: ganancia, ventas, margen, unidades o gastos. Abajo, este mes frente al pasado.' },
+      { route: '/analisis?tab=tiempo', target: 'analysis-selltime', title: 'Tiempo de venta', text: 'Cuántos días te demoras en promedio en vender, por producto y mes a mes.' },
+      { route: '/preguntones', target: 'inquiry-counter', title: 'Preguntones', text: 'El contador de los que preguntan y no compran, con su análisis semanal y mensual.' },
+      { route: '/calendario', target: 'calendar-month', title: 'Calendario', text: 'Anota pagos y pendientes, y elige cuántos días antes te avisa.' },
+    ],
+    finish: { label: 'Lección: expectativas', to: '/aprende/expectativas' },
+  },
 ];
 
 /* ---------------- Estado ---------------- */
 
 let active: { tour: Tour; step: number } | null = null;
+let version = 0;
 const listeners = new Set<() => void>();
 function emit() {
+  version++;
   listeners.forEach((l) => l());
 }
 
@@ -120,8 +142,47 @@ export function endTour(completed: boolean): void {
   active = null;
   emit();
 }
+/** «Omitir»: cierra el recorrido y no lo vuelve a ofrecer (se puede repetir desde Ayuda). */
+export function skipTour(): void {
+  if (!active) return;
+  if (!isTourDone(active.tour.id)) setPref(`tour:${active.tour.id}`, 'skipped');
+  endTour(false);
+  toast('Recorrido omitido. Lo repites cuando quieras en Ayuda → Recorridos guiados.', 'ok', 4500);
+}
 export function isTourDone(id: string): boolean {
   return getPref(`tour:${id}`, '') === 'done';
+}
+export function isTourSkipped(id: string): boolean {
+  return getPref(`tour:${id}`, '') === 'skipped';
+}
+
+/** «No mostrarme recorridos»: Inicio deja de ofrecerlos (igual puedes abrirlos desde Ayuda). */
+export function toursOff(): boolean {
+  return getPref('tours:off', '') === '1';
+}
+export function setToursOff(off: boolean): void {
+  setPref('tours:off', off ? '1' : '');
+  if (off && active) endTour(false);
+  emit();
+}
+
+/** Repetir primeros pasos: borra el avance de los recorridos, vuelve a ofrecerlos y empieza «Conoce la app». */
+export function restartFirstSteps(): void {
+  for (const t of TOURS) setPref(`tour:${t.id}`, '');
+  setPref('tourOffer', '');
+  setPref('tours:off', '');
+  startTour('app');
+}
+
+/** Para pantallas que muestran el estado de los recorridos. */
+export function useToursVersion(): number {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => version,
+  );
 }
 function go(step: number) {
   if (!active) return;
@@ -211,7 +272,7 @@ export function TourHost() {
   useEffect(() => {
     if (!st) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') endTour(false);
+      if (e.key === 'Escape') skipTour();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -261,8 +322,8 @@ export function TourHost() {
           ))}
         </div>
         <div className="tour-actions">
-          <button type="button" className="btn sm" onClick={() => endTour(false)}>
-            Salir
+          <button type="button" className="btn sm" onClick={() => skipTour()} data-testid="tour-skip" aria-label="Omitir el recorrido">
+            <Icon name="skip" size={16} /> Omitir
           </button>
           <SpeakerToggle text={spoken} />
           <span className="grow" />
@@ -300,6 +361,11 @@ export function TourHost() {
             </button>
           )}
         </div>
+        {last && tour.finish?.to.startsWith('tour:') ? (
+          <button type="button" className="btn block" style={{ marginTop: 8 }} onClick={() => endTour(true)} data-testid="tour-finish-here">
+            Terminar aquí (sin el siguiente recorrido)
+          </button>
+        ) : null}
         {last && tour.finish && !tour.finish.to.startsWith('tour:') ? (
           <button
             type="button"

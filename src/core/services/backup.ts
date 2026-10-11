@@ -5,6 +5,7 @@ import {
   DB_SCHEMA_VERSION,
   TABLES_V1,
   TABLES_V2,
+  TABLES_V3,
   alignUnitMovementV2,
   upgradeLotsV3,
   upgradeProductV3,
@@ -80,6 +81,12 @@ export const TABLE_LABEL: Partial<Record<TableName, string>> = {
   marketPrices: 'Precios de mercado',
   goals: 'Metas',
   lots: 'Lotes',
+  expectations: 'Expectativas',
+  inquiries: 'Preguntones',
+  notes: 'Calendario',
+  credits: 'Me deben',
+  creditPayments: 'Abonos de lo que te deben',
+  memos: 'Notas',
 };
 
 /* ---------------- Codificación ---------------- */
@@ -263,11 +270,12 @@ export const BACKUP_MIGRATIONS: Record<number, BackupMigration> = {
     const lots = upgradeLotsV3(t.products as Row[], t.movements as never, t.purchases as Row[], t.sales as Row[]);
     return { ...t, products: (t.products as Row[]).map((p) => upgradeProductV3({ ...p })), lots };
   },
+  3: (t) => ({ ...t, expectations: [], inquiries: [], notes: [], credits: [], creditPayments: [], memos: [] }),
 };
 
 /** Tablas que debe traer un respaldo según la versión de datos con la que se creó. */
 export function tablesForSchema(version: number): readonly string[] {
-  return version <= 1 ? TABLES_V1 : version === 2 ? TABLES_V2 : DATA_TABLES;
+  return version <= 1 ? TABLES_V1 : version === 2 ? TABLES_V2 : version === 3 ? TABLES_V3 : DATA_TABLES;
 }
 
 export function migrateTables(tables: Tables, fromVersion: number, toVersion = DB_SCHEMA_VERSION, migrations = BACKUP_MIGRATIONS): Tables {
@@ -385,6 +393,12 @@ const PK: Record<TableName, string> = {
   marketPrices: 'id',
   goals: 'id',
   lots: 'id',
+  expectations: 'id',
+  inquiries: 'id',
+  notes: 'id',
+  credits: 'id',
+  creditPayments: 'id',
+  memos: 'id',
 };
 
 const SPEC: Partial<Record<TableName, Record<string, FieldType>>> = {
@@ -416,6 +430,12 @@ const SPEC: Partial<Record<TableName, Record<string, FieldType>>> = {
   marketPrices: { key: 'str', model: 'str', capacity: 'str', condition: 'str', price: 'int', date: 'iso' },
   goals: { inventoryId: 'str?', name: 'str', metric: 'str', target: 'int', dueDate: 'iso?', status: 'str' },
   lots: { productId: 'str', inventoryId: 'str', source: 'str', date: 'iso?', qtyIn: 'int', valueIn: 'int', qty: 'int', value: 'int', costKnown: 'bool' },
+  expectations: { period: 'str', start: 'iso', end: 'iso', inventoryId: 'str?', expectedProfit: 'int', expectedRevenue: 'int', expectedUnits: 'int' },
+  inquiries: { inventoryId: 'str?', date: 'iso', productId: 'str?', status: 'str', boughtAt: 'iso?' },
+  notes: { title: 'str', description: 'str', day: 'str', time: 'str?', remindDays: 'arr', remindTime: 'str', done: 'bool', seen: 'arr' },
+  credits: { opId: 'str', inventoryId: 'str?', customerId: 'str', kind: 'str', amount: 'int', date: 'iso', dueDate: 'iso?', forgiven: 'int', status: 'str' },
+  creditPayments: { opId: 'str', creditId: 'str', customerId: 'str', date: 'iso', amount: 'int' },
+  memos: { title: 'str', text: 'str', pinned: 'bool', createdAt: 'iso', updatedAt: 'iso' },
 };
 
 function checkType(v: unknown, t: FieldType): boolean {

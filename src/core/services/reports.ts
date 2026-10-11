@@ -1,5 +1,5 @@
 import type { AppDB } from '../db';
-import type { ID, ISODate, Money, Movement, Product, ProductKind, Sale, SaleLine, Settings } from '../types';
+import type { Credit, Expense, ID, ISODate, Money, Movement, Payment, Product, ProductKind, Purchase, PurchaseLine, Sale, SaleLine, SaleReturn, Settings } from '../types';
 import { conditionGroup } from '../catalog';
 import { daysBetween, startOfDay } from '../util';
 import { lotOrder } from '../lots';
@@ -125,34 +125,83 @@ export interface FinancialSummary {
   generalExpensesExcluded: Money;
   capitalizedExpenses: Money;
   writeOffs: Money;
+  /** v2.3: saldos de fiados que perdonaste ("no me va a pagar"). Es pérdida. */
+  badDebts: Money;
   netProfit: Money;
   /** Dinero efectivamente recibido en el periodo (pagos − reembolsos). */
   collected: Money;
   initialStock: { units: number; value: Money; unknownCostUnits: number };
 }
 
-/**
- * Resumen de ACTIVIDAD del periodo. Las ventas y compras anuladas no cuentan.
- * Si `inventoryIds` es null, incluye todos los inventarios.
- */
-export async function getFinancialSummary(db: AppDB, period: Period, inventoryIds: ID[] | null): Promise<FinancialSummary> {
-  const invSet = inventoryIds ? new Set(inventoryIds) : null;
-  const inInv = (id: ID | null) => (invSet ? id !== null && invSet.has(id) : true);
+/** Datos para el resumen financiero (todas las filas o solo las del periodo). */
+export interface FinancialData {
+  purchases: Purchase[];
+  purchaseLines: PurchaseLine[];
+  sales: Sale[];
+  saleLines: SaleLine[];
+  returns: SaleReturn[];
+  expenses: Expense[];
+  payments: Payment[];
+  movements: Movement[];
+  /** v2.3: fiados sueltos (para lo perdonado). */
+  credits?: Credit[];
+}
 
-  const [purchases, sales, returns, expenses, payments, movements] = await Promise.all([
+/** Carga todo lo necesario para calcular resúmenes de varios periodos sin volver a leer la base de datos. */
+export async function loadFinancialData(db: AppDB): Promise<FinancialData> {
+  const [purchases, purchaseLines, sales, saleLines, returns, expenses, payments, movements, credits] = await Promise.all([
+    db.purchases.toArray(),
+    db.purchaseLines.toArray(),
+    db.sales.toArray(),
+    db.saleLines.toArray(),
+    db.returns.toArray(),
+    db.expenses.toArray(),
+    db.payments.toArray(),
+    db.movements.toArray(),
+    db.credits.toArray(),
+  ]);
+  return { purchases, purchaseLines, sales, saleLines, returns, expenses, payments, movements, credits };
+}
+
+export async function getFinancialSummary(db: AppDB, period: Period, inventoryIds: ID[] | null): Promise<FinancialSummary> {
+  const [purchases, sales, returns, expenses, payments, movements, credits] = await Promise.all([
     db.purchases.where('date').between(period.from, period.to, true, false).toArray(),
     db.sales.toArray(),
     db.returns.where('date').between(period.from, period.to, true, false).toArray(),
     db.expenses.where('date').between(period.from, period.to, true, false).toArray(),
     db.payments.where('date').between(period.from, period.to, true, false).toArray(),
     db.movements.where('at').between(period.from, period.to, true, false).toArray(),
+    db.credits.toArray(),
   ]);
+  const ps = purchases.filter((p) => p.status === 'active');
+  const ss = sales.filter((s) => s.status === 'active' && inPeriod(s.date, period));
+  const [purchaseLines, saleLines] = await Promise.all([
+    ps.length ? db.purchaseLines.where('purchaseId').anyOf(ps.map((p) => p.id)).toArray() : Promise.resolve([]),
+    ss.length ? db.saleLines.where('saleId').anyOf(ss.map((s) => s.id)).toArray() : Promise.resolve([]),
+  ]);
+  return summarizeFinancial({ purchases, purchaseLines, sales, saleLines, returns, expenses, payments, movements, credits }, period, inventoryIds);
+}
+
+/**
+ * Resumen de ACTIVIDAD del periodo (cálculo puro). Las ventas y compras anuladas no cuentan.
+ * Si `inventoryIds` es null, incluye todos los inventarios.
+ */
+export function summarizeFinancial(data: FinancialData, period: Period, inventoryIds: ID[] | null): FinancialSummary {
+  const invSet = inventoryIds ? new Set(inventoryIds) : null;
+  const inInv = (id: ID | null) => (invSet ? id !== null && invSet.has(id) : true);
+  const { sales } = data;
+  const purchases = data.purchases.filter((p) => inPeriod(p.date, period));
+  const returns = data.returns.filter((r) => inPeriod(r.date, period));
+  const expenses = data.expenses.filter((e) => inPeriod(e.date, period));
+  const payments = data.payments.filter((p) => inPeriod(p.date, period));
+  const movements = data.movements.filter((m) => inPeriod(m.at, period));
   const saleById = new Map(sales.map((s) => [s.id, s]));
   const voidedSales = new Set(sales.filter((s) => s.status === 'voided').map((s) => s.id));
 
   // Compras
   const ps = purchases.filter((p) => p.status === 'active' && inInv(p.inventoryId));
-  const pLines = ps.length ? await db.purchaseLines.where('purchaseId').anyOf(ps.map((p) => p.id)).toArray() : [];
+  const psIds = new Set(ps.map((p) => p.id));
+  const pLines = data.purchaseLines.filter((l) => psIds.has(l.purchaseId));
   const purchasesOut = {
     count: ps.length,
     total: ps.reduce((a, p) => a + p.total, 0),
@@ -162,7 +211,8 @@ export async function getFinancialSummary(db: AppDB, period: Period, inventoryId
 
   // Ventas del periodo
   const ss = sales.filter((s) => s.status === 'active' && inInv(s.inventoryId) && inPeriod(s.date, period));
-  const sLines = ss.length ? await db.saleLines.where('saleId').anyOf(ss.map((s) => s.id)).toArray() : [];
+  const ssIds = new Set(ss.map((s) => s.id));
+  const sLines = data.saleLines.filter((l) => ssIds.has(l.saleId));
   const salesOut = {
     count: ss.length,
     units: sLines.reduce((a, l) => a + l.quantity, 0),
@@ -213,6 +263,11 @@ export async function getFinancialSummary(db: AppDB, period: Period, inventoryId
     unknownCostUnits: init.reduce((a, m) => a + m.unknownDelta, 0),
   };
 
+  // Fiados perdonados (v2.3)
+  let badDebts = 0;
+  for (const sl of sales) if (sl.status === 'active' && sl.forgiven && sl.forgivenAt && inInv(sl.inventoryId) && inPeriod(sl.forgivenAt, period)) badDebts += sl.forgiven;
+  for (const c of data.credits ?? []) if (c.status === 'active' && c.forgiven && c.forgivenAt && inInv(c.inventoryId) && inPeriod(c.forgivenAt, period)) badDebts += c.forgiven;
+
   // Cobros efectivos
   const pays = payments.filter((p) => !voidedSales.has(p.saleId) && inInv(p.inventoryId) && saleById.has(p.saleId));
   const collected = pays.reduce((a, p) => a + (p.kind === 'payment' ? p.amount : -p.amount), 0);
@@ -232,7 +287,8 @@ export async function getFinancialSummary(db: AppDB, period: Period, inventoryId
     generalExpensesExcluded: generalExcluded,
     capitalizedExpenses,
     writeOffs,
-    netProfit: grossProfit - operatingExpenses - writeOffs,
+    badDebts,
+    netProfit: grossProfit - operatingExpenses - writeOffs - badDebts,
     collected,
     initialStock,
   };
@@ -243,6 +299,8 @@ export async function getFinancialSummary(db: AppDB, period: Period, inventoryId
 export interface Balances {
   receivables: Money;
   receivableSales: number;
+  /** v2.3: personas que te deben (ventas fiadas + fiados sueltos; las ventas sin comprador cuentan aparte). */
+  debtors: number;
   customerCredit: Money;
   available: number;
   stockValue: Money;
@@ -255,32 +313,47 @@ export interface Balances {
 export async function getBalances(db: AppDB, inventoryIds: ID[] | null): Promise<Balances> {
   const invSet = inventoryIds ? new Set(inventoryIds) : null;
   const inInv = (id: ID) => (invSet ? invSet.has(id) : true);
-  const [sales, lines, payments, products, units] = await Promise.all([
+  const [sales, lines, payments, products, units, credits, creditPayments] = await Promise.all([
     db.sales.toArray(),
     db.saleLines.toArray(),
     db.payments.toArray(),
     db.products.toArray(),
     db.units.toArray(),
+    db.credits.toArray(),
+    db.creditPayments.toArray(),
   ]);
   const linesBySale = groupBy(lines, (l) => l.saleId);
   const paysBySale = groupBy(payments, (p) => p.saleId);
   let receivables = 0;
   let receivableSales = 0;
   let customerCredit = 0;
+  const people = new Set<string>();
   for (const s of sales) {
     if (s.status !== 'active' || !inInv(s.inventoryId)) continue;
     const b = computeSaleBalance(s, linesBySale.get(s.id) ?? [], paysBySale.get(s.id) ?? []);
     if (b.pending > 0) {
       receivables += b.pending;
       receivableSales++;
+      people.add(s.customerId ?? `sale:${s.id}`);
     }
     customerCredit += b.credit;
+  }
+  const paidByCredit = new Map<ID, number>();
+  for (const p of creditPayments) paidByCredit.set(p.creditId, (paidByCredit.get(p.creditId) ?? 0) + p.amount);
+  for (const c of credits) {
+    if (c.status !== 'active' || (invSet && (!c.inventoryId || !invSet.has(c.inventoryId)))) continue;
+    const pending = creditPending(c, paidByCredit.get(c.id) ?? 0);
+    if (pending > 0) {
+      receivables += pending;
+      people.add(c.customerId);
+    }
   }
   const qtyProducts = products.filter((p) => p.tracking === 'quantity' && inInv(p.inventoryId));
   const us = summarizeUnits(units.filter((u) => inInv(u.inventoryId)));
   return {
     receivables,
     receivableSales,
+    debtors: people.size,
     customerCredit,
     available: us.available + qtyProducts.reduce((a, p) => a + p.qty, 0),
     stockValue: us.availableValue + qtyProducts.reduce((a, p) => a + p.stockValue, 0),
@@ -289,6 +362,11 @@ export async function getBalances(db: AppDB, inventoryIds: ID[] | null): Promise
     damaged: us.damaged,
     otherValue: us.otherValue,
   };
+}
+
+/** Saldo pendiente de un fiado suelto. */
+export function creditPending(c: Pick<Credit, 'amount' | 'forgiven' | 'status'>, paid: Money): Money {
+  return c.status === 'active' ? Math.max(0, c.amount - paid - (c.forgiven ?? 0)) : 0;
 }
 
 function groupBy<T>(arr: T[], key: (x: T) => string): Map<string, T[]> {

@@ -54,6 +54,15 @@ test('21. diseño adaptable: sin desbordes horizontales en 8 tamaños de pantall
     ['aprende', '/aprende'],
     ['leccion', '/aprende/lotes'],
     ['apariencia', '/apariencia'],
+    ['analisis', '/analisis?tab=resumen'],
+    ['analisis-tendencias', '/analisis?tab=tendencias'],
+    ['analisis-flujo', '/analisis?tab=flujo'],
+    ['analisis-tiempo', '/analisis?tab=tiempo'],
+    ['preguntones', '/preguntones'],
+    ['calendario', '/calendario'],
+    ['me-deben', '/me-deben'],
+    ['notas', '/notas'],
+    ['mas', '/mas'],
   ];
   for (const [vname, w, h] of VIEWPORTS) {
     await page.setViewportSize({ width: w, height: h });
@@ -61,7 +70,7 @@ test('21. diseño adaptable: sin desbordes horizontales en 8 tamaños de pantall
       await page.goto(`/#${path}`);
       await page.waitForTimeout(250);
       await noHorizontalOverflow(page);
-      if (['iphone-se-1', 'android-pixel', 'escritorio'].includes(vname) && ['inicio', 'unidad', 'venta-nueva', 'informes', 'capital'].includes(sname))
+      if (['iphone-se-1', 'android-pixel', 'escritorio'].includes(vname) && ['inicio', 'unidad', 'venta-nueva', 'informes', 'capital', 'analisis', 'calendario'].includes(sname))
         await page.screenshot({ path: `${SHOTS}/responsive-${vname}-${sname}.png` });
     }
   }

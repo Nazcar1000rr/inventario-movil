@@ -6,6 +6,7 @@ import {
   formatInt,
   getAlerts,
   getBalances,
+  getBusinessAnalysis,
   getCapitalSnapshot,
   getFinancialSummary,
   getSettings,
@@ -23,7 +24,10 @@ import { isIOS, isNative, isStandalone } from '../platform';
 import { navigate } from '../router';
 import { db, getPref, setPref, useAction, useLive } from '../store';
 import { DAILY_TIPS, pickTip } from '../help/content';
-import { isTourDone, startTour } from '../tour';
+import { isTourDone, startTour, toursOff } from '../tour';
+import { InquiryCounter } from './Inquiries';
+import { DueReminders, useDueReminders } from './Calendar';
+import { Meter } from '../components/viz';
 import { ListenButton } from '../components/speaker';
 
 export function Kpi({
@@ -148,7 +152,7 @@ function FirstInventory() {
 
 /** Ofrece el recorrido "Conoce la app" la primera vez. */
 function TourOffer() {
-  const [hidden, setHidden] = useState(() => getPref('tourOffer', '') !== '' || isTourDone('app'));
+  const [hidden, setHidden] = useState(() => getPref('tourOffer', '') !== '' || isTourDone('app') || toursOff());
   if (hidden) return null;
   return (
     <Card>
@@ -209,6 +213,59 @@ function DailyTipCard() {
   );
 }
 
+/** Avisos del calendario que ya llegaron (con la app abierta o al abrirla). */
+function HomeReminders() {
+  const due = useDueReminders();
+  if (!due?.length) return null;
+  return (
+    <Card
+      title={
+        <h2 className="with-tip">
+          <Icon name="clock" /> Recordatorios
+        </h2>
+      }
+      action={
+        <a href="#/calendario" className="small">
+          Calendario
+        </a>
+      }
+      flush
+    >
+      <DueReminders list={due} />
+    </Card>
+  );
+}
+
+/** Salud del negocio y expectativa del mes, con enlace al análisis completo. */
+function AnalysisTeaser({ ids }: { ids: string[] | null }) {
+  const a = useLive((d) => getBusinessAnalysis(d, ids), [JSON.stringify(ids)]);
+  if (!a || !a.hasSales) return null;
+  const m = a.expectations.month;
+  const goal = m.target ? (m.metric === 'profit' ? m.target.profit : m.target.revenue) : 0;
+  const got = m.metric === 'profit' ? m.actual.profit : m.actual.revenue;
+  const proj = m.projected ? (m.metric === 'profit' ? m.projected.profit : m.projected.revenue) : null;
+  return (
+    <a href="#/analisis" className="kpi-link" aria-label="Ver el análisis del negocio" data-testid="analysis-teaser">
+      <div className="kpi">
+        <div className="kpi-label">Análisis del negocio</div>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+          <span className="kpi-value">{a.health.score === null ? '—' : `${a.health.score}/100`}</span>
+          <span className="small strong">{a.health.label}</span>
+        </div>
+        {goal > 0 ? (
+          <div style={{ marginTop: 8 }}>
+            <Meter value={got / goal} marker={proj !== null ? proj / goal : null} label="Expectativa del mes" />
+            <div className="kpi-foot">
+              Expectativa del mes: llevas {Math.round((got / goal) * 100)} %{proj !== null ? ` · al ritmo actual ${Math.round((proj / goal) * 100)} %` : ''}
+            </div>
+          </div>
+        ) : null}
+        <div className="kpi-foot">Ver todo el análisis →</div>
+      </div>
+    </a>
+  );
+}
+
 export function HomeScreen() {
   const scope = useScope('homeScope');
   const period = usePeriod('homePeriod');
@@ -250,6 +307,25 @@ export function HomeScreen() {
       {invCount === 0 ? <FirstInventory /> : null}
       <GettingStartedCard />
       {settings && settings.dailyTips !== false ? <DailyTipCard /> : null}
+      <HomeReminders />
+      {invCount ? (
+        <Card
+          tour="home-inquiries"
+          title={
+            <h2 className="with-tip">
+              Preguntones <InfoTip k="inquiries" />
+            </h2>
+          }
+          action={
+            <a href="#/preguntones" className="small">
+              Ver análisis
+            </a>
+          }
+        >
+          <InquiryCounter compact />
+        </Card>
+      ) : null}
+      {invCount ? <AnalysisTeaser ids={ids} /> : null}
       {invCount ? (
         <>
           <div className="stack-sm">
@@ -296,7 +372,9 @@ export function HomeScreen() {
                     foot={data.cap.netCapital > 0 ? `Sobre ${formatCOP(data.cap.netCapital)} aportados` : 'Registra tu capital en Capital'}
                   />
                 </a>
-                <Kpi testId="kpi-receivables" label="Por cobrar" info="receivables" value={data.bal.receivables} foot={`${data.bal.receivableSales} venta(s) con saldo`} />
+                <a href="#/me-deben" className="kpi-link" aria-label="Ver quién te debe">
+                  <Kpi testId="kpi-receivables" label="Me deben" info="receivables" value={data.bal.receivables} foot={data.bal.debtors ? `${data.bal.debtors} persona(s) · Ver →` : 'Nadie te debe'} />
+                </a>
                 <Kpi testId="kpi-stock" label="Existencias disponibles" value={data.bal.available} money={false} foot={data.bal.inReview + data.bal.damaged ? `+${data.bal.inReview} en revisión, ${data.bal.damaged} dañadas` : undefined} />
                 <Kpi testId="kpi-stock-value" label="Valor a costo" info="stockValue" value={data.bal.stockValue} foot={data.bal.unknownCostCount ? `⚠ ${data.bal.unknownCostCount} unidad(es) sin costo no incluidas` : 'Costo de lo disponible'} />
                 <Kpi label="Días promedio hasta vender" info="avgDaysToSell" value={data.vel?.avgDays ?? 0} text={data.vel?.avgDays == null ? '—' : String(data.vel.avgDays).replace('.', ',')} money={false} foot={data.vel?.count ? `${data.vel.count} venta(s) con fecha conocida` : 'Sin datos suficientes'} />
@@ -362,7 +440,7 @@ function AlertsCard({ alerts, alertDays }: { alerts: Awaited<ReturnType<typeof g
   }
   if (alerts.warrantiesExpiring.length) items.push({ kind: 'info', text: `${alerts.warrantiesExpiring.length} garantía(s) vencen en los próximos ${alertDays} días`, href: '/garantias' });
   if (alerts.openClaims) items.push({ kind: 'warn', text: `${alerts.openClaims} reclamo(s) de garantía pendientes`, href: '/garantias' });
-  if (alerts.receivables.count) items.push({ kind: 'info', text: `${alerts.receivables.count} venta(s) con saldo por cobrar: ${formatCOP(alerts.receivables.amount)}`, href: '/operaciones?tab=ventas&f=pendientes' });
+  if (alerts.receivables.count) items.push({ kind: 'info', text: `Te deben ${formatCOP(alerts.receivables.amount)} (${alerts.receivables.count} venta(s) fiadas o pendientes)`, href: '/me-deben' });
   for (const d of alerts.duplicateIdentifiers.slice(0, 3)) items.push({ kind: 'bad', text: `Posible duplicado: IMEI/serial ${d.identifier} en ${d.codes.join(', ')}`, href: `/buscar?q=${d.identifier}` });
   for (const d of alerts.duplicateProducts.slice(0, 3)) items.push({ kind: 'warn', text: `Producto repetido en un inventario: ${d.name} (${d.count} veces)`, href: `/inventarios/${d.inventoryId}` });
   if (alerts.unknownCostUnits) items.push({ kind: 'info', text: `${alerts.unknownCostUnits} unidad(es) en existencia sin costo conocido` });

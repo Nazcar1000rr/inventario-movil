@@ -1,7 +1,7 @@
 {
   "name": "inventario-movil",
   "private": true,
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Gestión local de inventarios, compras, ventas y rentabilidad (PWA iOS + APK Android).",
   "type": "module",
   "scripts": {
@@ -21,6 +21,7 @@
     "@capacitor/app": "8.1.2",
     "@capacitor/core": "8.5.3",
     "@capacitor/filesystem": "8.1.4",
+    "@capacitor/local-notifications": "8.3.1",
     "@capacitor/share": "8.0.3",
     "dexie": "4.4.6",
     "dexie-react-hooks": "4.4.0",

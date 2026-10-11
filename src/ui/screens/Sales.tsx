@@ -13,6 +13,7 @@ import {
   EXPENSE_CATEGORIES,
   fifoOrder,
   formatCOP,
+  formatDate,
   formatDateTime,
   newOpId,
   nowISO,
@@ -80,20 +81,21 @@ const newSLine = (product: Product | null = null, unitIds: ID[] = []): SLine => 
 
 const DELIVERY_LABEL: Record<DeliveryStatus, string> = { na: 'No aplica', pending: 'Pendiente de entrega', delivered: 'Entregado' };
 
-export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId: string | null; productId: string | null; unitId: string | null }) {
+export function SaleFormScreen({ inventoryId, productId, unitId, fiado = false, customer = null }: { inventoryId: string | null; productId: string | null; unitId: string | null; fiado?: boolean; customer?: string | null }) {
   const [inv, setInv, invs] = useDefaultInventory(inventoryId);
   const current = invs?.find((i) => i.id === inv) ?? null;
   const pro = current?.mode === 'pro';
   const [lines, setLines] = useState<SLine[]>([newSLine()]);
   const [date, setDate] = useState<string | null>(nowISO());
   const [discount, setDiscount] = useState<number | null>(null);
-  const [payMode, setPayMode] = useState<'full' | 'partial' | 'pending'>('full');
+  const [payMode, setPayMode] = useState<'full' | 'partial' | 'pending'>(fiado ? 'pending' : 'full');
+  const [dueDate, setDueDate] = useState('');
   const [partial, setPartial] = useState<number | null>(null);
   const [method, setMethod] = useState('Efectivo');
   const [feeOverride, setFeeOverride] = useState<number | null>(null);
   const [feeEdit, setFeeEdit] = useState(false);
   const settings = useLive((d) => getSettings(d));
-  const [customerId, setCustomerId] = useState<ID | null>(null);
+  const [customerId, setCustomerId] = useState<ID | null>(customer);
   const [costs, setCosts] = useState<{ category: string; amount: number | null }[]>([]);
   const [warrantyOn, setWarrantyOn] = useState(false);
   const [wValue, setWValue] = useState<number | null>(1);
@@ -227,6 +229,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
           deliveryStatus: delivery,
           lines: lines.map((l) => ({ productId: l.product!.id, quantity: l.unitIds.length ? undefined : l.qty ?? 0, unitIds: l.unitIds.length ? l.unitIds : undefined, unitPrice: l.price ?? 0, lotId: l.lotId })),
           initialPayment,
+          dueDate: payMode !== 'full' && dueDate ? new Date(`${dueDate}T12:00:00`).toISOString() : null,
           initialPaymentFee: feeEdit ? feeOverride ?? 0 : undefined,
           costs: costs.filter((c) => (c.amount ?? 0) > 0).map((c) => ({ category: c.category, amount: c.amount ?? 0 })),
           warranty: warrantyOn ? { durationValue: wValue ?? 0, durationUnit: wUnit, conditions: wCond } : null,
@@ -354,6 +357,15 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
               <MoneyInput id="sa-partial" value={partial} onChange={setPartial} />
             </Field>
           ) : null}
+          {payMode !== 'full' ? (
+            <div className="stack-sm" data-testid="fiado-box">
+              <p className="small muted">Queda en «Me deben». Elige a quién le fías para llevar sus abonos.</p>
+              <PartyField type="customer" value={customerId} onChange={setCustomerId} />
+              <Field label="¿Cuándo te paga? (opcional)" htmlFor="sa-due">
+                <input id="sa-due" type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              </Field>
+            </div>
+          ) : null}
           {payMode !== 'pending' ? (
             <Field label="Método de pago" htmlFor="sa-method">
               <select id="sa-method" className="select" value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -370,7 +382,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId }: { inventoryId
           <details className="more" open={pro}>
             <summary>Comprador, garantía, gastos y notas (opcional)</summary>
             <div className="stack">
-              <PartyField type="customer" value={customerId} onChange={setCustomerId} />
+              {payMode === 'full' ? <PartyField type="customer" value={customerId} onChange={setCustomerId} /> : null}
               <div className="field">
                 <span className="field-label">Gastos de esta venta</span>
                 <span className="hint">Envío que pagas tú, comisión de un vendedor… Se restan en la ganancia neta. La comisión del datáfono se calcula sola.</span>
@@ -595,6 +607,16 @@ export function SaleDetailScreen({ id }: { id: ID }) {
         </Notice>
       ) : null}
       <FormError error={act.error} />
+      {active && (bal.pending > 0 || bal.forgiven > 0) ? (
+        <a className="btn block" href={`#/me-deben/${sale.customerId ?? `sale:${sale.id}`}`} data-testid="sale-debtor-link">
+          <Icon name="users" /> Ver en «Me deben»{sale.dueDate ? ` · prometió pagar el ${formatDate(sale.dueDate)}` : ''}
+        </a>
+      ) : null}
+      {active && bal.pending > 0 ? (
+        <a className="btn block wa-btn" href={`#/me-deben/${sale.customerId ?? `sale:${sale.id}`}?wa=1`} data-testid="sale-whatsapp">
+          <Icon name="send" /> Cobrar por WhatsApp
+        </a>
+      ) : null}
       {active && bal.pending > 0 ? (
         <button className="btn primary block" onClick={() => setSheet('payment')}>
           <Icon name="money" /> Registrar pago ({formatCOP(bal.pending)} pendiente)

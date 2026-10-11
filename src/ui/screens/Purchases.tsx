@@ -21,6 +21,7 @@ import { PartyField, ProductPicker } from '../components/pickers';
 import {
   ActionMenu,
   ask,
+  Badge,
   Card,
   Chips,
   DateTimeInput,
@@ -37,8 +38,9 @@ import {
   Sheet,
   TextInput,
 } from '../components/ui';
-import { navigate } from '../router';
+import { navigate, useRoute } from '../router';
 import { db, useAction, useLive, usePref } from '../store';
+import { CorrectedBadge, CorrectPurchaseSheet, SalePriceSheet } from '../components/corrections';
 import { toUnitDetails, UnitDetailFields, type UnitDetailValue } from './Products';
 import { ConditionChips } from '../components/parts';
 import { AddPurchaseCostSheet, PurchaseAddedCostsCard, PurchaseHints } from '../components/lots';
@@ -421,6 +423,9 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
   );
   const [editing, setEditing] = useState(false);
   const [addingCost, setAddingCost] = useState(false);
+  const route = useRoute();
+  const [correcting, setCorrecting] = useState<ID | null>(route.query.get('corregir'));
+  const [pricing, setPricing] = useState<Product | null>(null);
   const act = useAction();
   if (data === undefined) return <Page title="Compra" back="/operaciones?tab=compras"><Loading /></Page>;
   if (data === null) return <Page title="Compra" back="/operaciones?tab=compras"><Empty title="La compra no existe" /></Page>;
@@ -451,6 +456,7 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
           <ActionMenu
             title="Compra"
             actions={[
+              { label: 'Corregir cantidades o precios', icon: 'edit', onSelect: () => setCorrecting('1') },
               { label: 'Agregar gasto a esta compra', icon: 'receipt', onSelect: () => setAddingCost(true) },
               { label: 'Editar datos (proveedor, fecha, notas)', icon: 'edit', onSelect: () => setEditing(true) },
               { label: 'Anular compra', icon: 'ban', danger: true, onSelect: voidIt },
@@ -463,6 +469,11 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
         <Notice kind="warn" title="Compra anulada">
           {formatDateTime(p.voidedAt)} · {p.voidReason}
         </Notice>
+      ) : null}
+      {p.correctedAt ? (
+        <div className="row wrap">
+          <CorrectedBadge at={p.correctedAt} />
+        </div>
       ) : null}
       <FormError error={act.error} />
       <Card>
@@ -483,7 +494,17 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
         const prod = products[i];
         const lu = units.filter((u) => u.purchaseLineId === l.id);
         return (
-          <Card key={l.id} title={prod ? <a href={`#/productos/${prod.id}`} className="strong">{prod.name}</a> : 'Producto'}>
+          <Card
+            key={l.id}
+            title={prod ? <a href={`#/productos/${prod.id}`} className="strong">{prod.name}</a> : 'Producto'}
+            action={
+              p.status === 'active' ? (
+                <button type="button" className="btn sm" onClick={() => setCorrecting(l.id)} data-testid={`correct-line-btn-${i}`}>
+                  <Icon name="edit" /> Corregir
+                </button>
+              ) : undefined
+            }
+          >
             <KV
               rows={[
                 ['Cantidad', l.quantity],
@@ -491,6 +512,19 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
                 ['Gastos asignados', formatCOP(l.allocatedExtra)],
                 ['Costo total', formatCOP(l.totalCost), true],
                 ['Costo por unidad', formatCOP(Math.round(l.totalCost / l.quantity))],
+                [
+                  'Lo vendes a',
+                  prod ? (
+                    <span key="sp" className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                      {prod.salePrice === null ? <Badge kind="warn">Sin precio</Badge> : formatCOP(prod.salePrice)}
+                      <button type="button" className="btn sm" onClick={() => setPricing(prod)} aria-label={`Cambiar el precio de venta de ${prod.name}`} data-testid={`sale-price-btn-${i}`}>
+                        <Icon name="edit" />
+                      </button>
+                    </span>
+                  ) : (
+                    '—'
+                  ),
+                ],
               ]}
             />
             {lu.length ? (
@@ -513,6 +547,17 @@ export function PurchaseDetailScreen({ id }: { id: ID }) {
       ) : null}
       <p className="tiny muted">Registrada el {formatDate(p.createdAt)}.</p>
       {addingCost ? <AddPurchaseCostSheet purchase={p} onClose={() => setAddingCost(false)} /> : null}
+      {correcting && p.status === 'active' ? (
+        <CorrectPurchaseSheet
+          purchaseId={p.id}
+          focusLineId={lines.some((l) => l.id === correcting) ? correcting : null}
+          onClose={() => {
+            setCorrecting(null);
+            if (route.query.get('corregir')) navigate(`/compras/${p.id}`, { replace: true });
+          }}
+        />
+      ) : null}
+      {pricing ? <SalePriceSheet product={pricing} avgCost={null} onClose={() => setPricing(null)} /> : null}
       {editing ? <EditPurchaseSheet id={id} initial={{ notes: p.notes, supplierId: p.supplierId, paymentMethod: p.paymentMethod, date: p.date }} onClose={() => setEditing(false)} /> : null}
     </Page>
   );
@@ -538,7 +583,7 @@ function EditPurchaseSheet({ id, initial, onClose }: { id: ID; initial: { notes:
         </button>
       }
     >
-      <p className="small muted">Los importes no se editan: para corregirlos, anula la compra y regístrala de nuevo.</p>
+      <p className="small muted">Para corregir cantidades o valores usa «Corregir cantidades o precios» en el menú ⋮ de la compra.</p>
       <Field label="Fecha" htmlFor="ep-date" error={act.field === 'date' ? act.error : null}>
         <DateTimeInput id="ep-date" value={f.date} onChange={(v) => setF({ ...f, date: v ?? f.date })} />
       </Field>

@@ -21,11 +21,14 @@ import {
   type AllocationMethod,
   type AppDB,
   type ID,
+  type LotView,
   type Product,
   type Purchase,
 } from '../../core';
 import { db, useAction, useLive } from '../store';
 import { InfoTip } from './help';
+import { CorrectedBadge, CorrectLotSheet, lotCorrectable, openLotCorrection } from './corrections';
+import { Icon } from './Icon';
 import { Badge, Card, confirmAction, DateTimeInput, Empty, Field, FormError, KV, MoneyInput, Notice, Segmented, Sheet, TextInput } from './ui';
 
 /* ================= Lotes de un producto ================= */
@@ -33,6 +36,7 @@ import { Badge, Card, confirmAction, DateTimeInput, Empty, Field, FormError, KV,
 /** Tarjeta de lotes (productos por cantidad): lo que tienes separado por precio de compra. */
 export function LotsCard({ product, canOperate }: { product: Product; canOperate: boolean }) {
   const [showEmpty, setShowEmpty] = useState(false);
+  const [fixing, setFixing] = useState<LotView | null>(null);
   const lots = useLive((d) => listLots(d, product.id, showEmpty), [product.id, showEmpty, product.qty, product.stockValue]);
   const act = useAction();
   const on = product.costing === 'lots';
@@ -105,10 +109,20 @@ export function LotsCard({ product, canOperate }: { product: Product; canOperate
                         {l.supplierName ? ` · ${l.supplierName}` : ''}
                         {l.qtyIn !== l.qty ? ` · entraron ${l.qtyIn}` : ''}
                       </span>
+                      {l.correctedAt ? (
+                        <span style={{ display: 'block', marginTop: 4 }}>
+                          <CorrectedBadge at={l.correctedAt} />
+                        </span>
+                      ) : null}
                     </span>
                     <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
                       {i === 0 && l.qty > 0 ? <Badge kind="brand">Sale primero</Badge> : l.qty === 0 ? <Badge>Agotado</Badge> : null}
                       <span className="small money">{l.costKnown ? formatCOP(l.value) : '—'}</span>
+                      {canOperate && lotCorrectable(l) ? (
+                        <button type="button" className="btn sm" onClick={() => openLotCorrection(l, () => setFixing(l))} aria-label={`Corregir esta entrada (${l.qtyIn} u.)`} data-testid="lot-correct">
+                          <Icon name="edit" /> Corregir
+                        </button>
+                      ) : null}
                     </span>
                   </div>
                 </li>
@@ -123,6 +137,7 @@ export function LotsCard({ product, canOperate }: { product: Product; canOperate
           </>
         )}
       </div>
+      {fixing ? <CorrectLotSheet lot={fixing} product={product} onClose={() => setFixing(null)} /> : null}
     </Card>
   );
 }

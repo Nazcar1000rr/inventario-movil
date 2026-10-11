@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { antProjection, formatCOP } from '../../core';
+import { antProjection, formatCOP, updateSettings } from '../../core';
 import { Progress } from '../components/Chart';
 import { Icon } from '../components/Icon';
 import { Badge, Card, Empty, Field, IntInput, KV, ListItem, MoneyInput, Notice, Page } from '../components/ui';
 import { findLesson, LESSONS, type CalcKind, type Lesson } from '../help/lessons';
 import { navigate } from '../router';
 import { playSound } from '../sound';
-import { getPref, setPref } from '../store';
-import { isTourDone, startTour, TOURS } from '../tour';
+import { db, getPref, setPref } from '../store';
+import { isTourDone, isTourSkipped, restartFirstSteps, setToursOff, startTour, TOURS, toursOff, useToursVersion } from '../tour';
 import { ArticleBody } from './Help';
 import { articleText } from '../help/content';
 import { SpeakerToggle } from '../components/speaker';
@@ -23,24 +23,39 @@ export function isLessonDone(id: string): boolean {
 /* ================= Lista de lecciones y recorridos ================= */
 
 export function ToursCard() {
-  const [, force] = useState(0);
+  useToursVersion();
+  const off = toursOff();
   return (
     <Card title={<h2>Recorridos guiados</h2>}>
-      <p className="small muted">Te muestran la app paso a paso, sobre las pantallas reales.</p>
-      <ul className="list wrap-sub" data-testid="tours-list">
-        {TOURS.map((t) => (
-          <ListItem
-            key={t.id}
-            icon={isTourDone(t.id) ? 'check' : 'play'}
-            title={t.title}
-            sub={`${t.summary} · ${t.minutes} min`}
-            onClick={() => {
-              startTour(t.id);
-              force((x) => x + 1);
-            }}
-          />
-        ))}
-      </ul>
+      <div className="stack-sm">
+        <p className="small muted">Te muestran la app paso a paso, sobre las pantallas reales. En cualquier paso puedes tocar «Omitir».</p>
+        <button
+          type="button"
+          className="btn primary block"
+          data-testid="repeat-first-steps"
+          onClick={() => {
+            void updateSettings(db, { showGettingStarted: true });
+            navigate('/');
+            restartFirstSteps();
+          }}
+        >
+          <Icon name="play" /> Repetir primeros pasos
+        </button>
+        <ul className="list wrap-sub" data-testid="tours-list">
+          {TOURS.map((t) => (
+            <ListItem
+              key={t.id}
+              icon={isTourDone(t.id) ? 'check' : 'play'}
+              title={t.title}
+              sub={`${t.summary} · ${t.minutes} min${isTourDone(t.id) ? ' · Hecho' : isTourSkipped(t.id) ? ' · Omitido' : ''}`}
+              onClick={() => startTour(t.id)}
+            />
+          ))}
+        </ul>
+        <label className="check small">
+          <input type="checkbox" checked={off} onChange={(e) => setToursOff(e.target.checked)} data-testid="tours-off" /> No ofrecerme recorridos en Inicio
+        </label>
+      </div>
     </Card>
   );
 }
@@ -291,7 +306,170 @@ function Calculator({ kind }: { kind: CalcKind }) {
       return <NegotiateCalc />;
     case 'lots':
       return <LotsCalc />;
+    case 'correct':
+      return <CorrectCalc />;
+    case 'pace':
+      return <PaceCalc />;
+    case 'pareto':
+      return <ParetoCalc />;
+    case 'breakeven':
+      return <BreakEvenCalc />;
+    case 'conversion':
+      return <ConversionCalc />;
+    case 'fiado':
+      return <FiadoCalc />;
   }
+}
+
+function FiadoCalc() {
+  const [sold, setSold] = useState<number | null>(1_500_000);
+  const [fiado, setFiado] = useState<number | null>(500_000);
+  const [paid, setPaid] = useState<number | null>(200_000);
+  const owed = Math.max(0, v0(fiado) - v0(paid));
+  return (
+    <div className="stack">
+      <div className="grid-2">
+        <M id="f-sold" label="Ventas del mes" value={sold} onChange={setSold} />
+        <M id="f-fiado" label="De eso, fiado" value={fiado} onChange={setFiado} />
+        <M id="f-paid" label="Abonos recibidos" value={paid} onChange={setPaid} />
+      </div>
+      <Out
+        rows={[
+          ['Plata que entró a la caja', formatCOP(Math.max(0, v0(sold) - v0(fiado)) + Math.min(v0(paid), v0(fiado)))],
+          ['Te deben', formatCOP(owed), true],
+          ['Parte de tus ventas que no has cobrado', pct(owed, v0(sold))],
+        ]}
+      />
+    </div>
+  );
+}
+
+function CorrectCalc() {
+  const [paid, setPaid] = useState<number | null>(100_000);
+  const [typed, setTyped] = useState<number | null>(10);
+  const [real, setReal] = useState<number | null>(8);
+  const [sold, setSold] = useState<number | null>(3);
+  const [price, setPrice] = useState<number | null>(15_000);
+  const wrong = v0(typed) ? v0(paid) / v0(typed) : 0;
+  const right = v0(real) ? v0(paid) / v0(real) : 0;
+  const s = Math.min(v0(sold), v0(real));
+  return (
+    <div className="stack">
+      <div className="grid-2">
+        <M id="c-paid" label="Pagaste en total" value={paid} onChange={setPaid} />
+        <N id="c-typed" label="Cantidad que digitaste" value={typed} onChange={setTyped} />
+        <N id="c-real" label="Cantidad que llegó" value={real} onChange={setReal} />
+        <N id="c-sold" label="Ya vendiste" value={sold} onChange={setSold} />
+        <M id="c-price" label="Precio de venta" value={price} onChange={setPrice} />
+      </div>
+      <Out
+        rows={[
+          ['Costo c/u que creía la app', formatCOP(Math.round(wrong))],
+          ['Costo c/u de verdad', formatCOP(Math.round(right))],
+          ['Ganancia de lo vendido que creía', signed(Math.round((v0(price) - wrong) * s))],
+          ['Ganancia de lo vendido de verdad', signed(Math.round((v0(price) - right) * s)), true],
+          ['Te quedan', `${Math.max(0, v0(real) - s)} (no ${Math.max(0, v0(typed) - s)})`],
+        ]}
+      />
+    </div>
+  );
+}
+
+function PaceCalc() {
+  const [so, setSo] = useState<number | null>(150_000);
+  const [day, setDay] = useState<number | null>(10);
+  const [len, setLen] = useState<number | null>(30);
+  const [goal, setGoal] = useState<number | null>(500_000);
+  const proj = v0(day) ? (v0(so) / v0(day)) * v0(len) : 0;
+  const perDayNeeded = v0(len) > v0(day) ? (v0(goal) - v0(so)) / (v0(len) - v0(day)) : 0;
+  return (
+    <div className="stack">
+      <div className="grid-2">
+        <M id="p-so" label="Ganancia que llevas" value={so} onChange={setSo} />
+        <N id="p-day" label="Días que van del mes" value={day} onChange={setDay} max={31} />
+        <N id="p-len" label="Días del mes" value={len} onChange={setLen} max={31} />
+        <M id="p-goal" label="Tu expectativa" value={goal} onChange={setGoal} />
+      </div>
+      <Out
+        rows={[
+          ['Al ritmo actual terminarías con', formatCOP(Math.round(proj)), true],
+          ['Frente a tu expectativa', signed(Math.round(proj - v0(goal)))],
+          ['Para cumplirla necesitas ganar por día', perDayNeeded > 0 ? formatCOP(Math.round(perDayNeeded)) : 'Ya la cumpliste'],
+        ]}
+      >
+        <p className="tiny muted">{proj >= v0(goal) ? 'Vas bien.' : 'Vas por debajo: todavía estás a tiempo.'}</p>
+      </Out>
+    </div>
+  );
+}
+
+function ParetoCalc() {
+  const [v, setV] = useState<(number | null)[]>([900_000, 600_000, 250_000, 150_000, 100_000]);
+  const names = ['Producto 1', 'Producto 2', 'Producto 3', 'Producto 4', 'Producto 5'];
+  const total = v.reduce<number>((a, x) => a + Math.max(0, v0(x)), 0);
+  const sorted = names.map((n, i) => ({ n, g: Math.max(0, v0(v[i])) })).sort((a, b) => b.g - a.g);
+  let cum = 0;
+  const rows = sorted.map((r) => {
+    const prev = cum;
+    cum += total ? r.g / total : 0;
+    return [`${r.n}: ${pct(r.g, total)}`, prev < 0.8 ? 'A' : prev < 0.95 ? 'B' : 'C'] as [string, string];
+  });
+  return (
+    <div className="stack">
+      <div className="grid-2">
+        {names.map((n, i) => (
+          <M key={n} id={`pa-${i}`} label={`${n}: ganancia`} value={v[i]} onChange={(x) => setV((cur) => cur.map((y, k) => (k === i ? x : y)))} />
+        ))}
+      </div>
+      <Out rows={rows} />
+    </div>
+  );
+}
+
+function BreakEvenCalc() {
+  const [exp, setExp] = useState<number | null>(300_000);
+  const [margin, setMargin] = useState<number | null>(30);
+  const [sales, setSales] = useState<number | null>(700_000);
+  const need = v0(margin) ? v0(exp) / (v0(margin) / 100) : 0;
+  return (
+    <div className="stack">
+      <div className="grid-2">
+        <M id="b-exp" label="Gastos del mes" value={exp} onChange={setExp} />
+        <N id="b-m" label="Margen (%)" value={margin} onChange={setMargin} max={100} />
+        <M id="b-s" label="Lo que llevas vendido" value={sales} onChange={setSales} />
+      </div>
+      <Out
+        rows={[
+          ['Necesitas vender al mes', v0(margin) ? formatCOP(Math.round(need)) : '—', true],
+          ['Te falta', v0(margin) ? (v0(sales) >= need ? 'Ya lo superaste' : formatCOP(Math.round(need - v0(sales)))) : '—'],
+          ['Ganancia (o pérdida) con lo vendido', signed(Math.round((v0(sales) * v0(margin)) / 100 - v0(exp)))],
+        ]}
+      />
+    </div>
+  );
+}
+
+function ConversionCalc() {
+  const [ask, setAsk] = useState<number | null>(12);
+  const [sales, setSales] = useState<number | null>(4);
+  const interested = v0(ask) + v0(sales);
+  const per = v0(sales) ? interested / v0(sales) : 0;
+  return (
+    <div className="stack">
+      <div className="grid-2">
+        <N id="v-ask" label="Preguntones (no compraron)" value={ask} onChange={setAsk} />
+        <N id="v-s" label="Ventas" value={sales} onChange={setSales} />
+      </div>
+      <Out
+        rows={[
+          ['Interesados', String(interested)],
+          ['Personas por cada venta', v0(sales) ? (Math.round(per * 10) / 10).toString().replace('.', ',') : '—', true],
+          ['Compran de cada 100', interested ? String(Math.round((v0(sales) * 100) / interested)) : '—'],
+          ['Si convences a 1 más', v0(sales) ? `${v0(sales) + 1} ventas (+${pct(1, v0(sales))})` : '—'],
+        ]}
+      />
+    </div>
+  );
 }
 
 function CostCalc() {

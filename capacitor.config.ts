@@ -19,6 +19,11 @@ const config: CapacitorConfig = {
       initialViewportFitValueHint: 'cover',
       style: 'DEFAULT',
     },
+    // v2.3: recordatorios del calendario (notificaciones locales, sin internet)
+    LocalNotifications: {
+      smallIcon: 'ic_stat_notify',
+      iconColor: '#0d6b58',
+    },
   },
 };
 

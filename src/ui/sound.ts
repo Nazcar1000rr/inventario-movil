@@ -114,10 +114,7 @@ export function setIgnoreSilent(on: boolean): void {
   write('sound:ignoreSilent', on ? '1' : '0');
   applyAudioSession();
   // Un contexto de audio nuevo toma la configuración nueva
-  if (ctx) {
-    void ctx.close().catch(() => undefined);
-    ctx = null;
-  }
+  dropCtx();
   emit();
 }
 /** "playback" suena aunque el interruptor de silencio esté activado; "auto" respeta el silencio. */
@@ -157,20 +154,94 @@ export function useSoundPrefs(): {
 
 /* ---------------- Síntesis ---------------- */
 
+let lastTap: { at: number; gain: GainNode } | null = null;
+let noiseBuffer: AudioBuffer | null = null;
+
+/*
+ * Contexto de audio y "despertarlo" al volver a la app.
+ * Al salir de la app sin cerrarla, el teléfono pausa el audio: en iPhone el contexto queda "interrumpido" y a veces
+ * no vuelve aunque se le pida; en Android queda en pausa. Antes solo se reanudaba si estaba en pausa, así que
+ * después de volver no sonaba nada (la voz sí, porque usa otro motor). Ahora: al ocultarse la app se pausa, y en el
+ * primer toque al volver se crea un contexto nuevo dentro de ese toque (el iPhone solo deja arrancar audio así).
+ */
 let ctx: AudioContext | null = null;
-function audio(): AudioContext | null {
-  if (ctx) return ctx;
+let needsFresh = false;
+let wasHidden = false;
+let audioRestarts = 0;
+/** Estado del audio (solo para las pruebas automáticas). */
+export function audioDebug(): { restarts: number; state: string | null } {
+  return { restarts: audioRestarts, state: ctx ? (ctx.state as string) : null };
+}
+
+function makeCtx(): AudioContext | null {
   const AC =
     (window as unknown as { AudioContext?: typeof AudioContext }).AudioContext ??
     (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AC) return null;
   try {
     applyAudioSession();
-    ctx = new AC();
+    return new AC();
   } catch {
-    ctx = null;
+    return null;
   }
+}
+
+function dropCtx(): void {
+  const old = ctx;
+  ctx = null;
+  needsFresh = false;
+  noiseBuffer = null;
+  lastTap = null;
+  if (old && (old.state as string) !== 'closed') void old.close().catch(() => undefined);
+}
+
+function audio(): AudioContext | null {
+  if (ctx && (needsFresh || (ctx.state as string) === 'closed')) {
+    dropCtx();
+    audioRestarts++;
+  }
+  if (!ctx) ctx = makeCtx();
   return ctx;
+}
+
+/** Si al pedirle que siga el contexto no arranca en un momento, el próximo toque crea uno nuevo. */
+function resumeOrRenew(ac: AudioContext, then?: (ac: AudioContext) => void): void {
+  let settled = false;
+  const ok = () => {
+    if (settled) return;
+    settled = true;
+    if ((ac.state as string) === 'running') then?.(ac);
+    else needsFresh = true;
+  };
+  try {
+    void ac.resume().then(ok, () => {
+      settled = true;
+      needsFresh = true;
+    });
+  } catch {
+    needsFresh = true;
+    return;
+  }
+  setTimeout(() => {
+    if (!settled && (ac.state as string) !== 'running') {
+      settled = true;
+      needsFresh = true;
+    }
+  }, 400);
+}
+
+/** Se llama en cada toque (antes del clic): despierta el audio si la app estuvo en segundo plano. */
+function unlockAudio(): void {
+  if (!ctx) return; // se crea con el primer sonido
+  const st = ctx.state as string;
+  if (st === 'running') {
+    wasHidden = false;
+    return;
+  }
+  if (wasHidden || st === 'interrupted') needsFresh = true;
+  wasHidden = false;
+  const ac = audio();
+  if (ac && (ac.state as string) !== 'running') resumeOrRenew(ac);
 }
 
 interface Note {
@@ -313,8 +384,6 @@ export const RECIPES: Record<PackId, Record<SoundName, Note[]>> = {
 /** Últimos sonidos (solo nombres), para las pruebas automáticas. No guarda datos del negocio. */
 export const recentSounds: string[] = [];
 
-let lastTap: { at: number; gain: GainNode } | null = null;
-let noiseBuffer: AudioBuffer | null = null;
 
 function noise(ac: AudioContext): AudioBuffer {
   if (noiseBuffer && noiseBuffer.sampleRate === ac.sampleRate) return noiseBuffer;
@@ -373,8 +442,13 @@ export function playSound(name: SoundName, opts: { pack?: PackId; force?: boolea
   if (vol <= 0) return;
   const ac = audio();
   if (!ac) return;
+  if ((ac.state as string) === 'running') render(ac, name, pack, vol);
+  // En pausa (o interrumpido): suena apenas arranque; si no arranca, el próximo toque crea un audio nuevo
+  else resumeOrRenew(ac, (a) => render(a, name, pack, vol));
+}
+
+function render(ac: AudioContext, name: SoundName, pack: PackId, vol: number): void {
   try {
-    if (ac.state === 'suspended') void ac.resume();
     const now = ac.currentTime + 0.005;
     // Un sonido "de resultado" justo después de un toque reemplaza el clic (no se enciman)
     if (name !== 'tap' && lastTap && performance.now() - lastTap.at < 80) {
@@ -405,9 +479,21 @@ export function installSoundHandlers(): void {
   if (installed || typeof document === 'undefined') return;
   installed = true;
   applyAudioSession();
+  // Al salir de la app se pausa el audio; al volver, el primer toque lo despierta (o crea uno nuevo)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      wasHidden = true;
+      if (ctx && (ctx.state as string) === 'running') void ctx.suspend().catch(() => undefined);
+    } else applyAudioSession();
+  });
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) wasHidden = true;
+  });
+  for (const type of ['touchend', 'pointerup', 'keydown'] as const) document.addEventListener(type, unlockAudio, { capture: true, passive: true });
   document.addEventListener(
     'click',
     (e) => {
+      unlockAudio();
       const el = (e.target as HTMLElement | null)?.closest?.('button, a[href], [role="button"], input[type="checkbox"], input[type="radio"], summary') as HTMLElement | null;
       if (!el) return;
       if ((el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true') return;

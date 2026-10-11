@@ -100,9 +100,22 @@ export function buildLotsFromHistory(
   };
   const sorted = movements.filter((m) => m.productId === product.id && m.unitId === null).sort((a, b) => a.seq - b.seq);
   for (const m of sorted) {
-    if (m.qtyDelta === 0) continue;
     if ((m.type === 'sale' || m.type === 'void_sale') && m.refId && opts.voidedSales.has(m.refId)) continue;
     if ((m.type === 'purchase' || m.type === 'void_purchase') && m.refId && opts.voidedPurchases.has(m.refId)) continue;
+    // v2.3: una corrección de compra cambia la capa de esa compra (no es una entrada ni una salida nueva)
+    if (m.correction && m.type === 'purchase' && m.refId) {
+      const L = known.find((l) => l.purchaseId === m.refId);
+      if (L) {
+        const before = L.unit * L.qtyIn;
+        L.qtyIn += m.qtyDelta;
+        L.qty += m.qtyDelta;
+        L.unit = L.qtyIn > 0 ? Math.max(0, before + m.costDelta) / L.qtyIn : 0;
+        if (L.qty < 0) consistent = false;
+        if (L.qty <= 0) known.splice(known.indexOf(L), 1);
+        continue;
+      }
+    }
+    if (m.qtyDelta === 0) continue;
     if (m.qtyDelta > 0) {
       const unk = Math.max(0, Math.min(m.qtyDelta, m.unknownDelta));
       const kn = m.qtyDelta - unk;

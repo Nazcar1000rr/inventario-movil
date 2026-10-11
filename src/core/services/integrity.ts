@@ -24,7 +24,7 @@ export interface IntegrityReport {
 export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
   const issues: string[] = [];
   const warnings: string[] = [];
-  const [inventories, products, units, purchases, pLines, sales, sLines, payments, returns, expenses, movements, warranties, claims, repairs, photos, views, suppliers, customers, capital, debts, debtPayments, goals, lots] =
+  const [inventories, products, units, purchases, pLines, sales, sLines, payments, returns, expenses, movements, warranties, claims, repairs, photos, views, suppliers, customers, capital, debts, debtPayments, goals, lots, expectations, inquiries, notes, credits, creditPayments, memos] =
     await Promise.all([
       db.inventories.toArray(),
       db.products.toArray(),
@@ -49,6 +49,12 @@ export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
       db.debtPayments.toArray(),
       db.goals.toArray(),
       db.lots.toArray(),
+      db.expectations.toArray(),
+      db.inquiries.toArray(),
+      db.notes.toArray(),
+      db.credits.toArray(),
+      db.creditPayments.toArray(),
+      db.memos.toArray(),
     ]);
   const invIds = new Set(inventories.map((i) => i.id));
   const prodById = new Map(products.map((p) => [p.id, p]));
@@ -268,6 +274,39 @@ export async function verifyIntegrity(db: AppDB): Promise<IntegrityReport> {
   }
   for (const e of expenses) if (e.debtId) ref(debtById.has(e.debtId), `Gasto ${e.id}: deuda inexistente`);
   for (const g of goals) if (g.inventoryId) ref(invIds.has(g.inventoryId), `Meta ${g.name}: inventario inexistente`);
+  // Me deben (v2.3)
+  const customerIdsAll = new Set(customers.map((c) => c.id));
+  const creditById = new Map(credits.map((c) => [c.id, c]));
+  const paidByCredit = new Map<ID, number>();
+  for (const p of creditPayments) {
+    ref(creditById.has(p.creditId), `Abono ${p.id}: fiado inexistente`);
+    ref(Number.isInteger(p.amount) && p.amount > 0, `Abono ${p.id}: valor inválido`);
+    paidByCredit.set(p.creditId, (paidByCredit.get(p.creditId) ?? 0) + p.amount);
+  }
+  for (const c of credits) {
+    ref(customerIdsAll.has(c.customerId), `Fiado ${c.id}: persona inexistente`);
+    if (c.inventoryId) ref(invIds.has(c.inventoryId), `Fiado ${c.id}: inventario inexistente`);
+    ref(c.amount > 0 && c.forgiven >= 0, `Fiado ${c.id}: valores inválidos`);
+    ref((paidByCredit.get(c.id) ?? 0) + c.forgiven <= c.amount, `Fiado ${c.id}: abonos mayores que lo que debía`);
+    if (c.status === 'voided') ref(!paidByCredit.has(c.id), `Fiado ${c.id}: anulado con abonos`);
+  }
+  for (const sl of sales) ref((sl.forgiven ?? 0) >= 0 && (!sl.forgiven || !!sl.forgivenAt), `Venta ${sl.id}: perdón inválido`);
+  for (const n of notes) {
+    ref(/^\d{4}-\d{2}-\d{2}$/.test(n.day) && !!n.title, `Nota ${n.id}: día o nombre inválido`);
+    ref(Array.isArray(n.remindDays) && n.remindDays.every((d) => Number.isInteger(d) && d >= 0), `Nota ${n.title}: avisos inválidos`);
+  }
+  for (const q of inquiries) {
+    if (q.inventoryId) ref(invIds.has(q.inventoryId), `Preguntón ${q.id}: inventario inexistente`);
+    if (q.productId) ref(prodById.has(q.productId), `Preguntón ${q.id}: producto inexistente`);
+    ref(q.status === 'open' || (q.status === 'bought' && !!q.boughtAt), `Preguntón ${q.id}: estado inválido`);
+  }
+  for (const x of expectations) {
+    if (x.inventoryId) ref(invIds.has(x.inventoryId), `Expectativa ${x.id}: inventario inexistente`);
+    ref(x.period === 'month' || x.period === 'week', `Expectativa ${x.id}: periodo inválido`);
+    ref(x.start < x.end, `Expectativa ${x.id}: fechas incoherentes`);
+    ref(Number.isInteger(x.expectedProfit) && Number.isInteger(x.expectedRevenue) && x.expectedRevenue >= 0 && Number.isInteger(x.expectedUnits) && x.expectedUnits >= 0, `Expectativa ${x.id}: valores inválidos`);
+  }
+  for (const m of memos) ref(typeof m.title === 'string' && typeof m.text === 'string' && (m.title.trim() !== '' || m.text.trim() !== ''), `Nota ${m.id}: vacía`);
 
   return {
     ok: issues.length === 0,

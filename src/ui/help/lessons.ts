@@ -5,7 +5,7 @@ import { nb, nbBlock, type Block } from './content';
  * de celulares y accesorios, una calculadora para probar con tus números y preguntas para repasar.
  */
 
-export type CalcKind = 'cost' | 'margin' | 'profit' | 'cash' | 'capital' | 'rotation' | 'salary' | 'pricing' | 'negotiate' | 'lots';
+export type CalcKind = 'cost' | 'margin' | 'profit' | 'cash' | 'capital' | 'rotation' | 'salary' | 'pricing' | 'negotiate' | 'lots' | 'correct' | 'pace' | 'pareto' | 'breakeven' | 'conversion' | 'fiado';
 
 export interface QuizQuestion {
   q: string;
@@ -144,6 +144,7 @@ export const LESSONS: Lesson[] = [
       { p: 'Ejemplo: el producto A te deja 80 000 pero tarda 60 días. El B te deja 40 000 y se vende en 10 días. Con la plata de B puedes comprar y vender 6 veces en esos 60 días: 240 000.' },
       { p: 'La app te muestra la ganancia por día de cada modelo en Informes → Rentabilidad y el "dinero dormido" en Capital.' },
       { tip: 'Si algo lleva mucho tiempo sin venderse, a veces conviene bajarle un poco y volver a invertir esa plata en algo que se venda más rápido.' },
+      { p: 'En Análisis del negocio → Tiempo de venta ves cuántos días te demoras en promedio en vender, por producto y mes a mes.' },
     ],
     calc: 'rotation',
     quiz: [
@@ -253,6 +254,125 @@ export const LESSONS: Lesson[] = [
       { q: '¿Se pueden apagar los lotes?', options: ['Sí, en la ficha de cada producto', 'No', 'Solo borrando el producto'], answer: 0, explain: 'Y se pueden volver a prender: la app reconstruye los lotes con tu historial.' },
     ],
     tryIt: { to: '/ayuda/lotes', label: 'Cómo funcionan los lotes en la app' },
+  },
+  {
+    id: 'corregir',
+    emoji: '✏️',
+    title: 'Me equivoqué al digitar: ¿y mis ganancias?',
+    summary: 'Por qué un error de cantidad o de costo cambia la ganancia de lo que ya vendiste, y cómo corregirlo.',
+    minutes: 3,
+    blocks: [
+      { p: 'Compraste 8 cargadores por 100 000 en total, pero digitaste 10. La app creyó que cada uno te costó 10 000, cuando en realidad te costó 12 500.' },
+      { p: 'Si ya vendiste 3 a 15 000, la app calculó que ganaste 5 000 en cada uno (15 000 en total), pero en verdad ganaste 2 500 en cada uno (7 500 en total). Tu ganancia estaba inflada en 7 500.' },
+      { p: 'Al corregir la compra, la app arregla tres cosas: lo que te queda (5 cargadores, no 7), el costo de cada uno y la ganancia de las ventas que ya hiciste.' },
+      { h: '¿Cambió lo que pagaste?' },
+      { list: ['«Pagué lo mismo en total»: pagaste 100 000 por todo; solo te equivocaste en la cantidad. Cambia el costo de cada uno.', '«Cada una costó lo mismo»: cada una costó 10 000; si llegaron 8, pagaste 80 000. Cambia el total de la compra (y tu caja).'] },
+      { tip: 'La corrección no borra nada: queda en el historial como «Corrección», con su fecha.' },
+    ],
+    calc: 'correct',
+    quiz: [
+      { q: 'Pagaste 90 000 por 9 fundas, pero digitaste 10. ¿Cuánto te costó cada una de verdad?', options: ['9 000', '10 000', '8 100'], answer: 1, explain: '90 000 ÷ 9 = 10 000. La app creía 9 000 (90 000 ÷ 10).' },
+      { q: 'Si ya vendiste algunas, al corregir el costo…', options: ['Cambia la ganancia de esas ventas', 'Las ventas no cambian nunca', 'Se borran las ventas'], answer: 0, explain: 'La ganancia de una venta depende de lo que te costó lo vendido.' },
+      { q: '¿Dónde corriges una compra mal digitada?', options: ['En el detalle de la compra, botón «Corregir»', 'Anulándola y creándola otra vez', 'No se puede'], answer: 0, explain: 'También desde la ficha del producto, tocando «Corregir» en esa entrada.' },
+    ],
+    tryIt: { to: '/ayuda/correcciones', label: 'Cómo corregir en la app' },
+  },
+  {
+    id: 'expectativas',
+    emoji: '🎯',
+    title: 'Expectativas: ¿cuánto espero ganar este mes?',
+    summary: 'Ponerte una expectativa realista y saber a mitad de mes si vas bien.',
+    minutes: 3,
+    blocks: [
+      { p: 'Una expectativa es lo que esperas ganar en un mes o una semana. Una buena expectativa sale de lo que has hecho: por ejemplo, el promedio de tus últimos 3 meses.' },
+      { p: 'A mitad de mes no basta con ver cuánto llevas: hay que ver a dónde llegarías al ritmo actual. Si el 10 de un mes de 30 días llevas 150 000, al ritmo actual terminarías con unos 450 000 (150 000 ÷ 10 × 30).' },
+      { p: 'Si vas por debajo, todavía tienes tiempo: mueve lo que tienes quieto, publica más los días que más vendes o revisa precios.' },
+      { tip: 'La app te propone una expectativa automática con tus resultados; si quieres otra, la cambias en Análisis del negocio → Expectativas.' },
+    ],
+    calc: 'pace',
+    quiz: [
+      { q: 'El día 15 de un mes de 30 días llevas 200 000. Al ritmo actual terminarías con…', options: ['400 000', '200 000', '300 000'], answer: 0, explain: '200 000 ÷ 15 × 30 = 400 000.' },
+      { q: '¿De dónde sale la expectativa automática de la app?', options: ['Del promedio de tus meses anteriores con ventas', 'Es un número fijo', 'De otros negocios'], answer: 0, explain: 'Usa tus propios datos: los últimos 3 meses (u 8 semanas) con ventas.' },
+      { q: 'Si a mitad de mes vas por debajo de lo esperado…', options: ['Todavía puedes actuar: promociones, publicar más, revisar precios', 'Ya no hay nada que hacer', 'Hay que borrar la expectativa'], answer: 0, explain: 'Para eso sirve saberlo a tiempo.' },
+    ],
+    tryIt: { to: '/analisis?tab=metas', label: 'Ver mis expectativas' },
+  },
+  {
+    id: 'pareto',
+    emoji: '⭐',
+    title: 'La regla 80/20: tus productos estrella',
+    summary: 'Pocos productos dejan casi toda tu ganancia. Cuídalos.',
+    minutes: 3,
+    blocks: [
+      { p: 'En casi todos los negocios, unos pocos productos dejan la mayor parte de la ganancia. A eso se le llama la regla 80/20: más o menos el 20 % de los productos deja el 80 % de la ganancia.' },
+      { p: 'Ejemplo: de 10 productos, el iPhone 13 y los cargadores de 20 W dejan 1 600 000 de los 2 000 000 que ganaste (80 %). Esos son tus productos A.' },
+      { list: ['A: nunca te deben faltar; compra a tiempo y negocia mejor precio.', 'B: mantenlos, pero sin exagerar.', 'C: revisa si vale la pena seguir comprándolos o si tienen plata quieta.'] },
+    ],
+    calc: 'pareto',
+    quiz: [
+      { q: '¿Qué son los productos A?', options: ['Los que juntos dejan el 80 % de tu ganancia', 'Los más baratos', 'Los que más unidades tienes'], answer: 0, explain: 'Se mide por ganancia, no por cantidad.' },
+      { q: 'Un producto C que lleva meses sin venderse…', options: ['Tiene plata quieta: considera una promoción', 'Es el más importante', 'Hay que comprar más'], answer: 0, explain: 'Esa plata podría volver a la caja y trabajar en productos A.' },
+      { q: '¿Dónde ves tus productos estrella?', options: ['En Análisis del negocio → Productos', 'En Configuración', 'En el catálogo'], answer: 0, explain: 'Con los últimos 90 días de ventas.' },
+    ],
+    tryIt: { to: '/analisis?tab=productos', label: 'Ver mis productos estrella' },
+  },
+  {
+    id: 'equilibrio',
+    emoji: '⚖️',
+    title: 'Punto de equilibrio: cuánto vender para no perder',
+    summary: 'Cuánto necesitas vender al mes para cubrir tus gastos.',
+    minutes: 3,
+    blocks: [
+      { p: 'Tus gastos del mes (publicidad, empaques, arriendo, comisiones…) se pagan con lo que te queda de cada venta, es decir, con tu margen.' },
+      { p: 'Punto de equilibrio = gastos del mes ÷ margen. Si gastas 300 000 al mes y de cada venta te queda el 30 %, necesitas vender 1 000 000 al mes para no perder. Lo que vendas por encima es ganancia.' },
+      { p: 'Para bajarlo tienes dos caminos: gastar menos o mejorar el margen (comprar más barato o vender un poco más caro).' },
+    ],
+    calc: 'breakeven',
+    quiz: [
+      { q: 'Gastos de 200 000 al mes y margen del 25 %. ¿Cuánto necesitas vender?', options: ['800 000', '250 000', '500 000'], answer: 0, explain: '200 000 ÷ 0,25 = 800 000.' },
+      { q: 'Si tu margen sube, el punto de equilibrio…', options: ['Baja: necesitas vender menos', 'Sube', 'No cambia'], answer: 0, explain: 'Cada venta cubre más gastos.' },
+      { q: 'Lo que vendes por encima del punto de equilibrio…', options: ['Es ganancia', 'Es pérdida', 'No cuenta'], answer: 0, explain: 'Los gastos ya quedaron cubiertos.' },
+    ],
+    tryIt: { to: '/analisis?tab=flujo', label: 'Ver mi punto de equilibrio' },
+  },
+  {
+    id: 'preguntones',
+    emoji: '🙋',
+    title: 'Preguntones: cuántos preguntan por cada venta',
+    summary: 'Medir cuántas personas se interesan y cuántas compran.',
+    minutes: 3,
+    blocks: [
+      { p: 'No todos los que preguntan compran. Si cuentas a los que preguntan y no compran (los preguntones), sabes cuántas personas necesitas para hacer una venta.' },
+      { p: 'Ejemplo: en la semana te preguntaron 12 personas que no compraron y vendiste 4 veces. Hubo 16 interesados (12 + 4). Te preguntan 4 personas por cada venta (16 ÷ 4) y compran 25 de cada 100.' },
+      { p: 'Si convences a una persona más de cada 16, vendes 5 en vez de 4: un 25 % más de ventas sin conseguir más clientes.' },
+      { tip: 'Toca «+1 Preguntón» cada vez que alguien pregunte y no compre. Si vuelve y te compra, toca «Me compró».' },
+    ],
+    calc: 'conversion',
+    quiz: [
+      { q: '10 preguntones y 5 ventas en la semana. ¿Cuántas personas preguntan por cada venta?', options: ['3', '2', '5'], answer: 0, explain: '(10 + 5) ÷ 5 = 3.' },
+      { q: 'Si alguien que preguntó vuelve y compra…', options: ['Tocas «Me compró» y se resta del contador', 'Lo cuentas dos veces', 'No haces nada'], answer: 0, explain: 'Su compra ya cuenta como venta; así no se cuenta doble.' },
+      { q: 'Si las personas por venta bajan de 5 a 3…', options: ['Estás convenciendo a más gente', 'Estás vendiendo menos', 'No significa nada'], answer: 0, explain: 'Necesitas menos interesados para cada venta.' },
+    ],
+    tryIt: { to: '/preguntones', label: 'Ir a Preguntones' },
+  },
+  {
+    id: 'fiar',
+    emoji: '🤝',
+    title: 'Fiar sin quedarte sin plata',
+    summary: 'Lo que fías es venta, pero no es plata en tu caja hasta que te pagan.',
+    minutes: 3,
+    blocks: [
+      { p: 'Cuando fías, la venta cuenta (y su ganancia también), pero la plata todavía no está en tu caja: está en el bolsillo de tu cliente.' },
+      { p: 'Ejemplo: en el mes vendiste 1 500 000, pero 500 000 fueron fiados y te han abonado 200 000. En tu caja entraron 1 200 000 y te deben 300 000.' },
+      { list: ['Fía solo lo que puedas esperar sin dejar de comprar mercancía.', 'Pon siempre una fecha de pago y anótala: así la app te avisa.', 'Registra cada abono con su fecha, aunque sea pequeño.', 'Cobra a tiempo y con amabilidad: desde Me deben le escribes por WhatsApp con un mensaje listo.', 'Si alguien no te va a pagar, perdónalo en la app: es una pérdida real y así tus números quedan honestos.'] },
+    ],
+    calc: 'fiado',
+    quiz: [
+      { q: 'Vendiste 800 000, fiaste 300 000 y te abonaron 100 000. ¿Cuánto te deben?', options: ['200 000', '300 000', '700 000'], answer: 0, explain: '300 000 fiados − 100 000 abonados = 200 000.' },
+      { q: 'Lo que fías…', options: ['Es venta, pero no es plata en la caja hasta que te pagan', 'No cuenta como venta', 'Ya es plata en la caja'], answer: 0, explain: 'Por eso tu caja puede ser menor que tus ventas.' },
+      { q: 'Si alguien nunca te va a pagar, en la app…', options: ['Tocas «No me va a pagar» y se registra como pérdida', 'Borras la venta', 'No haces nada'], answer: 0, explain: 'Así tu ganancia no queda inflada con plata que no va a llegar.' },
+    ],
+    tryIt: { to: '/me-deben', label: 'Ir a Me deben' },
   },
 ];
 

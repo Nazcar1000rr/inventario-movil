@@ -51,6 +51,7 @@ export function PaymentBadge({ status }: { status: PaymentStatus }) {
     pendiente: ['bad', 'alert'],
     devuelta: ['info', 'return'],
     anulada: [undefined, 'ban'],
+    perdonada: ['info', 'undo'],
   };
   const [k, icon] = map[status];
   return (

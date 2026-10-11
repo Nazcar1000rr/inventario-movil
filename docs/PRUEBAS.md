@@ -1,13 +1,40 @@
 # Pruebas: lo ejecutado y lo pendiente
 
-Fecha de ejecución: 10 de octubre de 2026 (versión 2.2.0).
+Fecha de ejecución: 11 de octubre de 2026 (versión 2.3.0).
 
 Entorno:
 - Linux con Node 22.22.
 - Vitest 5.0.3 + fake-indexeddb 6.2.5: implementación de IndexedDB conforme al estándar, sobre la que corre el mismo código Dexie de la app.
 - Playwright 1.56 con Chromium 141 (compilación 1194), contra la **compilación de producción** (`npm run build` + `vite preview`).
 
-**Resultado: 88/88 pruebas de lógica y 24/24 pruebas de extremo a extremo aprobadas.** `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+**Resultado: 119/119 pruebas de lógica y 36/36 pruebas de extremo a extremo aprobadas.** `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+
+## Versión 2.3: qué se probó
+
+| Tema | Cómo se verificó | Resultado |
+|---|---|---|
+| Corregir una compra | Cantidad mal digitada (se conserva lo pagado, cambia el costo por unidad y la ganancia de lo ya vendido); costo por unidad mal digitado (cambia lo pagado, la caja, la venta y la pérdida de lo dado de baja); gastos repartidos en varias líneas; compra con deuda; costo promedio con y sin salidas posteriores; teléfonos: precio, quitar uno que no venía, agregar uno que faltó; bloqueos (menos de lo que ya salió, devoluciones, unidad vendida). Después de cada corrección: libro de movimientos = valor del stock, costo de cada unidad = movimientos + capitalizado y crecimiento del capital = ganancia (diferencia 0) | ✅ |
+| Corregir stock que ya tenías | Completar el costo desconocido de un lote (ventas y bajas pasan a tener costo), cantidad y costo de stock existente y de un ajuste, costo de un teléfono ya vendido. E2E: completar 9 000 por unidad con 2 vendidas → costo de lo vendido 18 000 | ✅ (Chromium) |
+| Análisis del negocio | Periodos de lunes a domingo, expectativa automática (promedio de meses con ventas) editable y "volver a la automática", ganancia esperada con existencias, ritmo, punto de equilibrio, cascadas que cuadran, 80/20, salud, comparación, tiempo de venta (promedio, mediana, rangos, por producto). E2E: gráficas con valor al tocar, tabla "Ver los números" y expectativa editable | ✅ |
+| Preguntones | +1 guarda fecha y hora; "Me compró" marca el más reciente; análisis semanal y mensual (personas por venta, conversión). E2E con el contador de Inicio | ✅ |
+| Calendario | Notas con descripción opcional, avisos en los días elegidos, aviso dentro de la app, archivo .ics con 3 alarmas | ✅ (Chromium) |
+| Me deben | Fiar mercancía, abonos con fecha de lo más antiguo a lo más nuevo, plata prestada y "ya me debía", "No me va a pagar" como pérdida (y deshacer); caja, capital y crecimiento cuadran | ✅ |
+| Cobrar por WhatsApp | Número: 10 dígitos → 57…, +57, 0057, otro país, inválidos. Enlace `wa.me` con el mensaje codificado. E2E: desde la venta pendiente, número de la ficha, mensaje de ejemplo "más firme", mensaje escrito a mano → se abre `https://wa.me/573001234567?text=…` con ese texto; número inválido avisado; número corregido guardado en la ficha | ✅ (Chromium; WhatsApp simulado) |
+| Notas | Crear desde el botón +, título opcional, fijar arriba, buscar sin tildes, pasar al calendario con el título, borrar y deshacer, se conservan al recargar y en el respaldo; doble toque no duplica | ✅ |
+| Menús por categorías | E2E: el botón + muestra 5 categorías (Vender y cobrar con 4 opciones…); el menú Más, 7 categorías; sin desborde en 8 tamaños de pantalla | ✅ (Chromium) |
+| Recorridos | E2E: «Omitir» cierra y marca "Omitido"; «Repetir primeros pasos» vuelve a mostrar la lista de Inicio y empieza «Conoce la app» (10 pasos); «Terminar aquí» no sigue con el siguiente; "No ofrecerme recorridos" quita la invitación de Inicio | ✅ (Chromium) |
+| Callar la voz | E2E con voz simulada que sigue hablando: aparece la barra «Leyendo»; «Callar» corta la lectura (se cancela la voz) y no vuelve a empezar; «Silenciar» apaga la lectura automática en toda la app | ✅ (Chromium, voz simulada) |
+| Sonidos al volver a la app | E2E con un audio simulado que imita al iPhone: al salir de la app queda "interrumpido" y no responde; al volver, el primer toque crea un audio nuevo y el sonido suena (el viejo se cierra). Sin el arreglo, esta prueba no sonaba | ✅ (Chromium, audio simulado) |
+| Migración 2.2 → 2.3 | Respaldos de la 2.1/2.2 se convierten sin expectativas, notas ni fiados (tablas vacías); integridad sin problemas | ✅ |
+
+### Errores reales encontrados y corregidos (v2.3)
+
+1. **Sonidos mudos al volver a la app** (reportado por el usuario): el audio solo se reanudaba si estaba "en pausa"; en iPhone queda "interrumpido" y no volvía. Ahora se recrea con el primer toque al volver.
+2. Al abrir "Corregir entrada", el cursor caía en la cantidad y lo que escribías en el costo podía terminar en la cantidad. Ahora, si el costo no se conoce, el cursor va directo al costo, y el foco inicial respeta el campo marcado.
+3. Varios textos nuevos usaban formas que la prueba de tono marca ("toque", "sus datos"). Se reescribieron.
+4. En el menú Más con mosaicos, "Compradores" y "Configuración" se partían a mitad de palabra. Se ajustó el tamaño y la división de palabras.
+
+**No probado aquí (2.3):** notificaciones reales de Android (permiso, alarmas exactas, aviso con la app cerrada y después de reiniciar), agregar el .ics al Calendario del iPhone, abrir WhatsApp de verdad desde el APK y desde el iPhone, y los sonidos al volver de otra app en un teléfono real. Ver la lista de verificación.
 
 ## Versión 2.2: qué se probó
 
@@ -115,6 +142,10 @@ Las 24 pruebas obligatorias de la v1 (inventarios y modos, compras, ventas, stoc
 | Sonidos reales y modo silencio del iPhone | En Chromium se comprobó qué sonido se dispara y la opción de la sesión de audio (simulada), no cómo se oye | Apariencia, sonidos y voz → ▶ en cada uno, con y sin silencio |
 | Voz real | Chromium no trae voces; se probó con una voz simulada. En Android usa un plugin nativo que solo se compila en GitHub Actions | Apariencia, sonidos y voz → Escuchar un ejemplo; hacer un recorrido |
 | Transferencia real entre un iPhone y un Android | Requiere dos dispositivos físicos | Lista de abajo |
+| Notificaciones del calendario (Android) | El plugin de notificaciones solo funciona en la app nativa, que se compila en GitHub Actions; no hay teléfono para ver los avisos | Lista de abajo, paso 15 |
+| Calendario del iPhone (.ics) y abrir WhatsApp | Se comprobó el archivo .ics (3 alarmas) y el enlace `wa.me` exacto en Chromium; no se abrieron en un iPhone ni en un Android | Lista de abajo, paso 15 |
+| Sonidos al volver de otra app en un teléfono | Se probó con un audio simulado que se comporta como el del iPhone (queda "interrumpido") | Lista de abajo, paso 15 |
+| Actualización 2.2 → 2.3 en el navegador | Probada con respaldos de la 2.2 y en la capa de datos; el cambio de esquema solo agrega tablas vacías | Hacer un respaldo antes de actualizar |
 
 ## Lista de verificación en dispositivos físicos (≈ 20 minutos por teléfono)
 
@@ -132,14 +163,20 @@ Las 24 pruebas obligatorias de la v1 (inventarios y modos, compras, ventas, stoc
 12. Android: el botón Atrás cierra diálogos, vuelve atrás y en Inicio sale de la app.
 13. **v2.1:** compra unos audífonos a dos precios distintos y mira los lotes en la ficha; registra el pasaje en "Gasto del viaje de compras"; registra un gasto personal; haz el recorrido "Conoce la app"; en Apariencia, sonidos y voz toca ▶ en cada sonido y apaga uno.
 14. **v2.2:** Más → Apariencia, sonidos y voz: prueba los colores, el modo oscuro, el degradado y el modo lite; toca "Escuchar un ejemplo" (si no hay voz en español, en Android toca "Instalar voces"); haz el recorrido "Conoce la app" y silencia con la bocina; en iPhone activa "Sonar aunque el iPhone esté en silencio" y prueba con el interruptor de silencio.
+15. **v2.3:**
+    - **Android:** Calendario → «Permitir notificaciones»; crea una nota para dentro de 10 minutos con aviso "el mismo día" a esa hora, cierra la app y espera la notificación; tócala (debe abrir la nota). Reinicia el teléfono con otra nota pendiente y comprueba que también avisa.
+    - **iPhone:** abre una nota → «Agregar al calendario del iPhone» → Agregar; revisa que el Calendario del iPhone tenga el evento con sus alertas.
+    - **WhatsApp:** fía algo a una persona con número → Me deben → «Cobrar por WhatsApp» → cambia el mensaje → debe abrirse su chat con ese texto.
+    - **Sonidos:** con los sonidos prendidos, sal de la app sin cerrarla (abre WhatsApp), vuelve y toca un botón: debe sonar.
+    - Corrige una compra (cantidad o costo) y revisa que la ganancia de una venta anterior cambie; mira Análisis del negocio, los preguntones, Notas y los menús + y Más por categorías; en un recorrido toca «Omitir» y luego «Repetir primeros pasos»; mientras la voz lee, toca «Callar».
 
 ## Cómo volver a ejecutar las pruebas
 
 ```bash
 npm ci
-npm test                     # 88 pruebas de lógica (~5 s)
+npm test                     # 119 pruebas de lógica (~12 s)
 npm run build
-npx playwright test          # 24 pruebas E2E (~7 min). Requiere el navegador Chromium de Playwright
+npx playwright test          # 36 pruebas E2E (~9 min). Requiere el navegador Chromium de Playwright
 ```
 
 Para regenerar el manual en PDF (después de cambiar la ayuda): `npm run build`, `npm run preview` en otra terminal y `node scripts/make-manual-pdf.mjs`; luego `npm run build` otra vez.

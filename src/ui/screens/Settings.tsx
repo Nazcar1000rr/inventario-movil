@@ -6,42 +6,29 @@ import { Icon } from '../components/Icon';
 import { Card, confirmAction, Empty, Field, FormError, IntInput, KV, ListItem, Loading, MoneyInput, Notice, Page, Segmented, TextInput } from '../components/ui';
 import { getStorageStatus, isIOS, isNative, platformName, requestPersistence, type StorageStatus } from '../platform';
 import { useRoute } from '../router';
+import { MORE_GROUPS } from '../menu';
 import { db, useAction, useLive } from '../store';
 import { canIgnoreSilentSwitch, PACKS, playSound, setIgnoreSilent, setPack, setSoundOn, setToneOverride, setVolume, SOUNDS, useSoundPrefs, type PackId } from '../sound';
 
 declare const __APP_VERSION__: string;
 
 export function MoreScreen() {
-  const items: [string, string, string, string?][] = [
-    ['/capital', 'Capital', 'trend', 'Cuánto vale tu negocio y cuánto crece'],
-    ['/deudas', 'Deudas y préstamos', 'card', 'Tarjeta, proveedores, préstamos y lo que te prestaste'],
-    ['/personal', 'Gastos personales', 'wallet', 'Gustos y gastos hormiga: ¿salen de tus ganancias o del capital?'],
-    ['/aprende', 'Aprende de negocios', 'star', 'Lecciones cortas con ejemplos, calculadoras y preguntas'],
-    ['/informes', 'Informes', 'chart', 'Finanzas, tiempos, más vendidos y rentabilidad'],
-    ['/resumen', 'Resumen mensual', 'image', 'Imagen o PDF para compartir'],
-    ['/precios', 'Precios de mercado', 'tag', 'Historial de precios y precio sugerido'],
-    ['/calculadora', '¿Cuánto pagar?', 'calc', 'Precio máximo de compra'],
-    ['/garantias', 'Garantías', 'shield', 'Vigentes, por vencer y reclamos'],
-    ['/proveedores', 'Proveedores', 'truck'],
-    ['/compradores', 'Compradores', 'users'],
-    ['/vistas', 'Vistas consolidadas', 'layers', 'Consultar varios inventarios juntos'],
-    ['/catalogo', 'Catálogo de modelos', 'book'],
-    ['/buscar', 'Buscar', 'search', 'Código, IMEI, serial, modelo…'],
-    ['/historial', 'Historial general', 'history'],
-    ['/respaldo', 'Respaldo y restauración', 'download', 'Exportar, importar, deshacer'],
-    ['/apariencia', 'Apariencia, sonidos y voz', 'palette', 'Colores, animaciones, tonos y lectura en voz alta'],
-    ['/ajustes', 'Configuración', 'sliders'],
-    ['/ayuda', 'Ayuda', 'help', 'Manual, primeros pasos, modo práctica y novedades'],
-  ];
   return (
     <Page title="Más" help="more">
-      <Card flush>
-        <ul className="list">
-          {items.map(([href, title, icon, sub]) => (
-            <ListItem key={href} href={href} title={title} icon={icon} sub={sub} />
-          ))}
-        </ul>
-      </Card>
+      {MORE_GROUPS.map((g) => (
+        <Card key={g.title} title={g.title}>
+          <div className="quick-grid" data-testid="more-group">
+            {g.items.map((n) => (
+              <a key={n.href} href={`#${n.href}`} className="quick-tile" title={n.sub}>
+                <span className="quick-icon" aria-hidden="true">
+                  <Icon name={n.icon} size={20} />
+                </span>
+                <span className="quick-label">{n.label}</span>
+              </a>
+            ))}
+          </div>
+        </Card>
+      ))}
     </Page>
   );
 }

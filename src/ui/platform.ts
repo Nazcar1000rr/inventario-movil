@@ -16,6 +16,46 @@ export function isStandalone(): boolean {
   return nav.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches === true;
 }
 
+/* ---------------- Compartir texto y abrir otras apps ---------------- */
+
+/** Comparte un texto con el menú del teléfono; si no hay, lo copia. Devuelve lo que pasó. */
+export async function shareText(text: string, title = 'Compartir'): Promise<'shared' | 'copied' | 'cancelled'> {
+  try {
+    if (isNative()) {
+      await Share.share({ text, dialogTitle: title });
+      return 'shared';
+    }
+    const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
+    if (nav.share) {
+      await nav.share({ text });
+      return 'shared';
+    }
+  } catch {
+    return 'cancelled';
+  }
+  try {
+    await navigator.clipboard?.writeText(text);
+  } catch {
+    /* sin portapapeles */
+  }
+  return 'copied';
+}
+
+/**
+ * Abre un enlace en otra app (WhatsApp, el navegador). En la app de Android, Capacitor manda los enlaces externos
+ * al sistema, que abre la app que corresponde. En el iPhone y el navegador se abre en una pestaña nueva.
+ * Debe llamarse directamente desde un toque.
+ */
+export function openExternal(url: string): void {
+  if (isNative()) {
+    window.location.href = url;
+    return;
+  }
+  const w = window.open(url, '_blank');
+  if (w) w.opener = null;
+  else window.location.href = url;
+}
+
 /* ---------------- Almacenamiento persistente ---------------- */
 
 export interface StorageStatus {

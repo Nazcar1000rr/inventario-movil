@@ -4,6 +4,9 @@ import { AskHost, ErrorBoundary, Sheet, ToastHost } from './components/ui';
 import { navigate, useRoute } from './router';
 import { practice } from './store';
 import { TourHost } from './tour';
+import { SpeechBar } from './components/speechbar';
+import { MORE_GROUPS, QUICK_GROUPS } from './menu';
+import { MemosScreen } from './screens/Memos';
 import { BackupScreen } from './screens/Backup';
 import { CapitalScreen } from './screens/Capital';
 import { DebtDetailScreen, DebtsScreen } from './screens/Debts';
@@ -13,6 +16,10 @@ import { SummaryScreen } from './screens/Summary';
 import { PersonalScreen } from './screens/Personal';
 import { LearnScreen, LessonScreen } from './screens/Learn';
 import { AppearanceScreen } from './screens/Appearance';
+import { AnalysisScreen } from './screens/Analysis';
+import { InquiriesScreen } from './screens/Inquiries';
+import { CalendarScreen } from './screens/Calendar';
+import { DebtorScreen, DebtorsScreen } from './screens/Debtors';
 import { CatalogScreen } from './screens/Catalog';
 import { HomeScreen } from './screens/Home';
 import { HistoryScreen, InventoriesScreen, InventoryDetailScreen } from './screens/Inventories';
@@ -48,7 +55,7 @@ function resolve(seg: string[], q: URLSearchParams): ReactNode {
       if (b === 'nueva') return <PurchaseFormScreen inventoryId={q.get('inv')} productId={q.get('product')} />;
       return b ? <PurchaseDetailScreen id={b} /> : <OperationsScreen tab="compras" />;
     case 'ventas':
-      if (b === 'nueva') return <SaleFormScreen inventoryId={q.get('inv')} productId={q.get('product')} unitId={q.get('unit')} />;
+      if (b === 'nueva') return <SaleFormScreen key={q.get('fiado') ?? ''} inventoryId={q.get('inv')} productId={q.get('product')} unitId={q.get('unit')} fiado={q.get('fiado') === '1'} customer={q.get('cliente')} />;
       return b ? <SaleDetailScreen id={b} /> : <OperationsScreen tab="ventas" />;
     case 'operaciones':
       return <OperationsScreen tab={(q.get('tab') as 'ventas' | 'compras' | 'gastos') ?? 'ventas'} />;
@@ -93,6 +100,16 @@ function resolve(seg: string[], q: URLSearchParams): ReactNode {
       return <AppearanceScreen />;
     case 'aprende':
       return b ? <LessonScreen id={b} /> : <LearnScreen />;
+    case 'analisis':
+      return <AnalysisScreen />;
+    case 'preguntones':
+      return <InquiriesScreen />;
+    case 'calendario':
+      return <CalendarScreen />;
+    case 'me-deben':
+      return b ? <DebtorScreen key={b} debtorKey={b} /> : <DebtorsScreen />;
+    case 'notas':
+      return <MemosScreen />;
   }
   return null;
 }
@@ -104,41 +121,13 @@ const NAV: { href: string; label: string; icon: string; match: (s: string[]) => 
   { href: '/mas', label: 'Más', icon: 'menu', match: (s) => !['', 'inventarios', 'productos', 'unidades', 'stock', 'historial', 'operaciones', 'ventas', 'compras', 'gastos'].includes(s[0] ?? '') },
 ];
 
-const SIDE: { href: string; label: string; icon: string; key: string }[] = [
+/** Barra lateral (tableta o computador): lo principal arriba y el resto por categorías, como en Más. */
+const SIDE_MAIN: { href: string; label: string; icon: string; key: string }[] = [
   { href: '/', label: 'Inicio', icon: 'home', key: '' },
   { href: '/inventarios', label: 'Inventarios', icon: 'box', key: 'inventarios' },
   { href: '/operaciones?tab=ventas', label: 'Ventas', icon: 'tag', key: 'ventas' },
   { href: '/operaciones?tab=compras', label: 'Compras', icon: 'cart', key: 'compras' },
   { href: '/operaciones?tab=gastos', label: 'Gastos', icon: 'receipt', key: 'gastos' },
-  { href: '/capital', label: 'Capital', icon: 'trend', key: 'capital' },
-  { href: '/deudas', label: 'Deudas', icon: 'card', key: 'deudas' },
-  { href: '/personal', label: 'Gastos personales', icon: 'wallet', key: 'personal' },
-  { href: '/informes', label: 'Informes', icon: 'chart', key: 'informes' },
-  { href: '/precios', label: 'Precios de mercado', icon: 'tag', key: 'precios' },
-  { href: '/garantias', label: 'Garantías', icon: 'shield', key: 'garantias' },
-  { href: '/proveedores', label: 'Proveedores', icon: 'truck', key: 'proveedores' },
-  { href: '/compradores', label: 'Compradores', icon: 'users', key: 'compradores' },
-  { href: '/vistas', label: 'Vistas consolidadas', icon: 'layers', key: 'vistas' },
-  { href: '/catalogo', label: 'Catálogo', icon: 'book', key: 'catalogo' },
-  { href: '/buscar', label: 'Buscar', icon: 'search', key: 'buscar' },
-  { href: '/respaldo', label: 'Respaldo', icon: 'download', key: 'respaldo' },
-  { href: '/apariencia', label: 'Apariencia y sonido', icon: 'palette', key: 'apariencia' },
-  { href: '/ajustes', label: 'Configuración', icon: 'sliders', key: 'ajustes' },
-  { href: '/aprende', label: 'Aprende de negocios', icon: 'star', key: 'aprende' },
-  { href: '/ayuda', label: 'Ayuda', icon: 'help', key: 'ayuda' },
-];
-
-export const QUICK_ACTIONS: { href: string; label: string; icon: string; hint: string }[] = [
-  { href: '/ventas/nueva', label: 'Registrar venta', icon: 'tag', hint: 'Sale del inventario y suma ingresos' },
-  { href: '/compras/nueva', label: 'Registrar compra', icon: 'cart', hint: 'Entra al inventario con su costo' },
-  { href: '/gastos/nuevo', label: 'Registrar gasto', icon: 'receipt', hint: 'Publicidad, empaques, arriendo…' },
-  { href: '/gastos/nuevo?tipo=compra', label: 'Gasto del viaje de compras', icon: 'truck', hint: 'Pasajes y comida: se reparte entre las compras del día' },
-  { href: '/gastos/nuevo?tipo=personal', label: 'Gasto personal (para ti)', icon: 'wallet', hint: 'Un gusto o gasto hormiga con plata del negocio' },
-  { href: '/stock/nuevo', label: 'Ingresar stock existente', icon: 'box', hint: 'Mercancía que ya tenías (no es una compra nueva)' },
-  { href: '/capital', label: 'Aporte, retiro o préstamo a ti', icon: 'wallet', hint: 'Dinero que entra o sale entre tú y el negocio' },
-  { href: '/deudas', label: 'Deuda o abono', icon: 'card', hint: 'Tarjeta, crédito del proveedor, préstamos' },
-  { href: '/calculadora', label: '¿Cuánto pagar por un equipo?', icon: 'calc', hint: 'Precio máximo de compra según el mercado' },
-  { href: '/productos/nuevo', label: 'Crear producto', icon: 'plus', hint: 'Sin registrar existencias todavía' },
 ];
 
 export function App() {
@@ -156,10 +145,20 @@ export function App() {
         <button className="btn primary" style={{ marginBottom: 10 }} onClick={() => setQuick(true)} data-tour="quick">
           <Icon name="plus" /> Registrar
         </button>
-        {SIDE.map((n) => (
-          <a key={n.href} href={`#${n.href}`} aria-current={sideKey === n.key ? 'page' : undefined} data-tour={n.key === 'inventarios' ? 'nav-inventarios' : n.key === 'ventas' ? 'nav-operaciones' : n.key === 'ajustes' ? 'nav-mas' : undefined}>
+        {SIDE_MAIN.map((n) => (
+          <a key={n.href} href={`#${n.href}`} aria-current={sideKey === n.key ? 'page' : undefined} data-tour={n.key === 'inventarios' ? 'nav-inventarios' : n.key === 'ventas' ? 'nav-operaciones' : undefined}>
             <Icon name={n.icon} size={20} /> {n.label}
           </a>
+        ))}
+        {MORE_GROUPS.map((g, gi) => (
+          <div key={g.title} className="side-group" data-tour={gi === 0 ? 'nav-mas' : undefined}>
+            <p className="side-title">{g.title}</p>
+            {g.items.map((n) => (
+              <a key={n.href} href={`#${n.href}`} aria-current={sideKey === n.key ? 'page' : undefined}>
+                <Icon name={n.icon} size={20} /> {n.label}
+              </a>
+            ))}
+          </div>
         ))}
       </nav>
       <main className="main" id="main">
@@ -195,30 +194,37 @@ export function App() {
       </nav>
       {quick ? (
         <Sheet title="Registrar" onClose={() => setQuick(false)}>
-          <div className="stack-sm">
-            {QUICK_ACTIONS.map((a) => (
-              <button
-                key={a.href}
-                className="menu-item"
-                onClick={() => {
-                  setQuick(false);
-                  navigate(a.href);
-                }}
-              >
-                <Icon name={a.icon} />
-                <span className="grow">
-                  <span className="strong" style={{ display: 'block' }}>
-                    {a.label}
-                  </span>
-                  <span className="small muted">{a.hint}</span>
-                </span>
-              </button>
+          <div className="quick-groups" data-testid="quick-menu">
+            {QUICK_GROUPS.map((g) => (
+              <section key={g.title} className="quick-group" aria-label={g.title}>
+                <h3 className="quick-title">{g.title}</h3>
+                <div className="quick-grid">
+                  {g.items.map((a) => (
+                    <button
+                      key={a.href}
+                      type="button"
+                      className="quick-tile"
+                      title={a.hint}
+                      onClick={() => {
+                        setQuick(false);
+                        navigate(a.href);
+                      }}
+                    >
+                      <span className="quick-icon" aria-hidden="true">
+                        <Icon name={a.icon} size={20} />
+                      </span>
+                      <span className="quick-label">{a.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         </Sheet>
       ) : null}
       <NewsHost />
       <TourHost />
+      <SpeechBar />
       <AskHost />
       <ToastHost />
     </div>

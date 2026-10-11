@@ -21,7 +21,7 @@ Ambas se publican solas con GitHub Actions cada vez que se sube un cambio al rep
 
 Necesita iOS 15.4 o superior; se recomienda iOS 17 o superior.
 
-### Actualizar (por ejemplo, a la 2.2)
+### Actualizar (por ejemplo, a la 2.3)
 
 1. **Antes:** en la app, Más → Respaldo → Preparar respaldo → guárdalo fuera del teléfono.
 2. Abre la app con internet. Aparece "Hay una versión nueva de la app": toca **Actualizar ahora**.
@@ -30,6 +30,7 @@ Necesita iOS 15.4 o superior; se recomienda iOS 17 o superior.
 ### Cosas importantes en iPhone
 
 - **Logo nuevo (versión 2.2):** iOS guarda el ícono cuando agregas la app a la pantalla de inicio y normalmente no lo cambia después. Para ver el logo nuevo: Respaldo → Preparar respaldo y guárdalo fuera del teléfono → quita la app de la pantalla de inicio → vuelve a agregarla desde Safari → Respaldo → Elegir archivo de respaldo. Si no te importa el ícono, no hace falta: todo lo demás se actualiza solo.
+- **Recordatorios del calendario (2.3):** Apple no permite que una app web programe notificaciones sin un servidor, y esta app no usa servidores. Por eso, en iPhone los avisos aparecen **al abrir la app** (en Inicio y en Calendario). Para que el iPhone te avise **con la app cerrada**, abre la nota y toca **Agregar al calendario del iPhone** (o "Pasar todas al calendario"): se abre un archivo .ics con sus avisos y tocas **Agregar**. Si después cambias la nota en la app, vuelve a agregarla (el calendario del iPhone no se actualiza solo).
 - **Voz y sonidos en silencio:** en Más → Apariencia, sonidos y voz puedes activar "Sonar aunque el iPhone esté en silencio" (iOS 17 o superior).
 
 - **Usa solo la app instalada.** Si usas la página en una pestaña de Safari, iOS puede borrar sus datos tras 7 días sin uso, y los datos de Safari y los de la app instalada están separados. Si registraste algo en Safari, pásalo con *Respaldo* (preparar en Safari, importar en la app).
@@ -55,7 +56,7 @@ Si algún día quieres publicarla en otro lugar: en el repositorio, **Settings �
 
 Necesita Android 7.0 o superior, con *Android System WebView* o Chrome actualizado (versión 90 o superior).
 
-### Actualizar (por ejemplo, a la 2.2)
+### Actualizar (por ejemplo, a la 2.3)
 
 1. **Antes:** Más → Respaldo → Preparar respaldo → guárdalo fuera del teléfono (o "Guardar en Documentos").
 2. Instala el APK nuevo **encima** del anterior, **sin desinstalar**. Los datos se conservan porque la firma es la misma.
@@ -64,6 +65,7 @@ Necesita Android 7.0 o superior, con *Android System WebView* o Chrome actualiza
 ### Cosas importantes en Android
 
 - **Desinstalar la app o "Borrar datos" en Ajustes elimina la base de datos.** La app desactiva la copia automática a la nube de Google (sin nube), así que la única copia es tu archivo de respaldo.
+- **Notificaciones de los recordatorios (2.3):** en Calendario → *Notificaciones del teléfono* toca **Permitir notificaciones** y acepta. Los avisos salen aunque la app esté cerrada y se vuelven a programar si reinicias el teléfono. En Android 12 o superior, si la app dice que las **alarmas exactas** están apagadas, tócalo y activa *Alarmas y recordatorios* para que lleguen a la hora exacta (si no, pueden llegar unos minutos tarde). Si tu teléfono tiene ahorro de batería fuerte (Xiaomi, Huawei, Samsung…), pon la app en "Sin restricciones".
 - **Respaldos** desde *Respaldo*: **Compartir / guardar…** abre el menú de Android (WhatsApp, Drive, Gmail, Bluetooth, Quick Share) y **Guardar en Documentos** deja una copia en `Documentos/InventarioMovil/`, que no se borra al desinstalar.
 
 ### La firma (léela antes de compilar por tu cuenta)

@@ -49,6 +49,8 @@ export interface SaleInput {
   lines: SaleLineInput[];
   /** Dinero recibido al registrar la venta (0 = pendiente). */
   initialPayment?: Money;
+  /** v2.3: fiado: fecha en que el cliente prometió pagar (opcional). */
+  dueDate?: ISODate | null;
   /** Gastos de la venta (comisión, envío...). Se registran como gastos operativos vinculados. */
   costs?: SaleCostInput[];
   warranty?: { durationValue: number; durationUnit: 'days' | 'months'; conditions?: string } | null;
@@ -76,7 +78,7 @@ export function estimatePaymentFee(fees: Record<string, number>, method: string,
 }
 
 /** Registra la comisión del medio de pago como gasto operativo vinculado a la venta. Uso interno. */
-async function addPaymentFeeExpense(
+export async function addPaymentFeeExpense(
   db: AppDB,
   sale: Pick<Sale, 'id' | 'inventoryId'>,
   args: { date: ISODate; method: string; amount: Money; fee: Money | null | undefined },
@@ -119,7 +121,7 @@ interface Atom {
   lotId?: ID | null;
 }
 
-export type PaymentStatus = 'pagada' | 'parcial' | 'pendiente' | 'devuelta' | 'anulada';
+export type PaymentStatus = 'pagada' | 'parcial' | 'pendiente' | 'devuelta' | 'anulada' | 'perdonada';
 
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   pagada: 'Pagada',
@@ -127,6 +129,7 @@ export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   pendiente: 'Pago pendiente',
   devuelta: 'Devuelta',
   anulada: 'Anulada',
+  perdonada: 'Saldo perdonado',
 };
 
 export interface SaleBalance {
@@ -141,6 +144,8 @@ export interface SaleBalance {
   pending: Money;
   /** Saldo a favor del cliente (se le debe reembolsar). */
   credit: Money;
+  /** v2.3: saldo perdonado (pérdida). */
+  forgiven: Money;
   status: PaymentStatus;
 }
 
@@ -150,17 +155,19 @@ export function computeSaleBalance(sale: Sale, lines: SaleLine[], payments: Paym
   const refunded = payments.filter((p) => p.kind === 'refund').reduce((a, p) => a + p.amount, 0);
   const collected = paid - refunded;
   if (sale.status === 'voided') {
-    return { effective: 0, returned, paid, refunded, collected, pending: 0, credit: 0, status: 'anulada' };
+    return { effective: 0, returned, paid, refunded, collected, pending: 0, credit: 0, forgiven: 0, status: 'anulada' };
   }
   const effective = sale.total - returned;
-  const pending = Math.max(0, effective - collected);
+  const forgiven = sale.forgiven ?? 0;
+  const pending = Math.max(0, effective - collected - forgiven);
   const credit = Math.max(0, collected - effective);
   let status: PaymentStatus;
   if (effective === 0 && returned > 0) status = 'devuelta';
+  else if (pending === 0 && forgiven > 0) status = 'perdonada';
   else if (pending === 0) status = 'pagada';
   else if (collected > 0) status = 'parcial';
   else status = 'pendiente';
-  return { effective, returned, paid, refunded, collected, pending, credit, status };
+  return { effective, returned, paid, refunded, collected, pending, credit, forgiven, status };
 }
 
 export async function getSaleBalance(db: AppDB, saleId: ID): Promise<SaleBalance> {
@@ -271,6 +278,7 @@ export async function createSale(db: AppDB, input: SaleInput): Promise<Sale> {
       voidedAt: null,
       voidReason: '',
       createdAt: nowISO(),
+      dueDate: input.dueDate && initialPayment < total ? assertDate(input.dueDate, 'dueDate', 'Fecha en que te paga', { allowFuture: true }) : null,
     };
     await db.sales.add(sale);
 
@@ -477,6 +485,7 @@ export async function addRefund(
     const sale = await db.sales.get(input.saleId);
     if (!sale) fail('not_found', 'La venta no existe.');
     if (sale.status === 'voided') fail('voided', 'La venta está anulada.');
+    if ((sale.forgiven ?? 0) > 0) fail('forgiven', 'Esta venta tiene un saldo perdonado. Quita el perdón en «Me deben» antes de registrar un reembolso.');
     const bal = await getSaleBalance(db, sale.id);
     if (amount > bal.collected) fail('refund_too_high', `El reembolso supera lo cobrado (${bal.collected}).`, 'amount');
     await db.payments.add({
@@ -542,6 +551,7 @@ export async function registerReturn(db: AppDB, input: ReturnInput): Promise<Sal
     const sale = await db.sales.get(input.saleId);
     if (!sale) fail('not_found', 'La venta no existe.');
     if (sale.status === 'voided') fail('voided', 'La venta está anulada; no admite devoluciones.');
+    if ((sale.forgiven ?? 0) > 0) fail('forgiven', 'Esta venta tiene un saldo perdonado. Quita el perdón en «Me deben» antes de registrar la devolución.');
     if (Date.parse(date) < Date.parse(sale.date) - 60_000)
       fail('incoherent_date', 'La fecha de devolución no puede ser anterior a la venta.', 'date');
     const balBefore = await getSaleBalance(db, sale.id);
@@ -789,12 +799,13 @@ export async function voidSale(db: AppDB, saleId: ID, reason: string, opts: { vo
 export async function updateSaleInfo(
   db: AppDB,
   saleId: ID,
-  patch: { notes?: string; customerId?: ID | null; paymentMethod?: string; deliveryStatus?: DeliveryStatus },
+  patch: { notes?: string; customerId?: ID | null; paymentMethod?: string; deliveryStatus?: DeliveryStatus; dueDate?: ISODate | null },
 ): Promise<void> {
   await tx(db, async () => {
     const sale = await db.sales.get(saleId);
     if (!sale) fail('not_found', 'La venta no existe.');
     const upd: Partial<Sale> = {};
+    if (patch.dueDate !== undefined) upd.dueDate = patch.dueDate === null ? null : assertDate(patch.dueDate, 'dueDate', 'Fecha en que te paga', { allowFuture: true });
     if (patch.notes !== undefined) upd.notes = cleanStr(patch.notes, 1000);
     if (patch.paymentMethod !== undefined) upd.paymentMethod = cleanStr(patch.paymentMethod, 40);
     if (patch.deliveryStatus !== undefined) {

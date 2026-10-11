@@ -126,7 +126,7 @@ describe('v2 · migración de datos de la v1', () => {
 
     const db = new AppDB(name);
     await db.open();
-    expect(db.verno).toBe(3);
+    expect(db.verno).toBe(4);
     await initDatabase(db);
     // Nada se perdió
     for (const t of TABLES_V1) if (t !== 'meta' && t !== 'catalogModels') expect(await db.table(t).count(), t).toBe(v1[t].length);

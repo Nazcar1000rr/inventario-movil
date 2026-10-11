@@ -101,6 +101,8 @@ export async function confirmTyped(page: Page, text: string) {
 /** Captura para la documentación: oculta avisos flotantes y la barra inferior fija (que en capturas de página completa queda en medio). */
 export async function docShot(page: Page, name: string, fullPage = true) {
   const style = await page.addStyleTag({ content: '.toasts, .bottom-nav, .practice-banner { display: none !important; }' });
+  // Espera a que terminen las animaciones de entrada para que la captura no salga a medias
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running' || (a.effect?.getComputedTiming().iterations ?? 1) === Infinity), undefined, { timeout: 3000 }).catch(() => undefined);
   await page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage });
   await style.evaluate((el) => el.remove());
 }

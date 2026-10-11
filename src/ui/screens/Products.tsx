@@ -46,6 +46,7 @@ import {
 } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { db, useAction, useLive, usePref } from '../store';
+import { SalePriceSheet } from '../components/corrections';
 import { ConditionChips, PartsBadges, PartsEditor, STANDARD_CONDITIONS } from '../components/parts';
 import { LotSelect, LotsCard, PriceHistoryCard } from '../components/lots';
 import { Kpi } from './Home';
@@ -214,6 +215,7 @@ export function ProductDetailScreen({ id }: { id: ID }) {
   const [status, setStatus] = useState<'available' | 'in_review' | 'damaged' | 'sold' | 'archived' | 'all'>('available');
   const [partsFilter, setPartsFilter] = useState<'any' | 'repaired' | 'generic' | 'clean'>('any');
   const [adjust, setAdjust] = useState(false);
+  const [pricing, setPricing] = useState(false);
   const [grouping, setGrouping] = usePref('unitGrouping', 'unit');
   const act = useAction();
 
@@ -276,7 +278,22 @@ export function ProductDetailScreen({ id }: { id: ID }) {
         <Kpi label="Disponibles" value={avail} money={false} foot={p.tracking === 'unit' && count('in_review') + count('damaged') ? `+${count('in_review')} en revisión, ${count('damaged')} dañadas` : undefined} />
         <Kpi label="Valor a costo" value={value} foot={unknown ? `⚠ ${unknown} sin costo conocido` : undefined} />
         <Kpi label={p.tracking === 'quantity' ? 'Costo promedio' : 'Costo medio'} value={avg ?? 0} text={avg === null ? '—' : undefined} foot={avg === null ? 'Sin datos de costo' : p.tracking === 'quantity' ? (p.costing === 'lots' ? 'Promedio de tus lotes' : 'Promedio ponderado') : undefined} />
-        <Kpi label="Precio sugerido" value={p.salePrice ?? 0} text={p.salePrice === null ? '—' : undefined} foot={p.salePrice === null ? 'No definido' : avg !== null && p.salePrice ? `Margen estimado ${formatCOP(p.salePrice - avg)}` : undefined} />
+        <Kpi
+          label="Precio de venta"
+          value={p.salePrice ?? 0}
+          text={p.salePrice === null ? '—' : undefined}
+          testId="kpi-sale-price"
+          foot={
+            <>
+              {p.salePrice === null ? 'No definido' : avg !== null && p.salePrice ? `Margen estimado ${formatCOP(p.salePrice - avg)}` : null}
+              {canOperate ? (
+                <button type="button" className="btn sm kpi-edit" onClick={() => setPricing(true)} data-testid="edit-sale-price">
+                  <Icon name="edit" /> {p.salePrice === null ? 'Poner precio' : 'Cambiar'}
+                </button>
+              ) : null}
+            </>
+          }
+        />
       </div>
       {canOperate ? (
         <div className="actions">
@@ -387,15 +404,16 @@ export function ProductDetailScreen({ id }: { id: ID }) {
               <a className="item" href={m.refType === 'sale' && m.refId ? `#/ventas/${m.refId}` : m.refType === 'purchase' && m.refId ? `#/compras/${m.refId}` : m.unitId ? `#/unidades/${m.unitId}` : undefined} style={!m.refId && !m.unitId ? { cursor: 'default' } : undefined}>
                 <span className="item-main">
                   <span className="item-title" style={{ display: 'block' }}>
+                    {m.correction ? 'Corrección · ' : ''}
                     {MOVE_LABEL[m.type]}
-                    {m.notes ? <span className="muted small"> · {m.notes}</span> : null}
+                    {m.notes && !(m.correction && m.notes.startsWith('Corrección')) ? <span className="muted small"> · {m.notes}</span> : null}
                   </span>
                   <span className="item-sub" style={{ display: 'block' }}>
                     {m.dateUnknown ? 'Fecha real desconocida' : formatDateTime(m.at)}
                     {m.writeOff ? ` · pérdida ${formatCOP(m.writeOff)}` : ''}
                   </span>
                 </span>
-                <span className="item-side num strong">{m.qtyDelta > 0 ? `+${m.qtyDelta}` : m.qtyDelta === 0 ? '±0' : m.qtyDelta}</span>
+                <span className="item-side num strong">{m.qtyDelta > 0 ? `+${m.qtyDelta}` : m.qtyDelta === 0 ? (m.correction && m.costDelta ? `${m.costDelta > 0 ? '+' : '−'}${formatCOP(Math.abs(m.costDelta))}` : '±0') : m.qtyDelta}</span>
               </a>
             </li>
           )}
@@ -407,6 +425,7 @@ export function ProductDetailScreen({ id }: { id: ID }) {
         </Card>
       ) : null}
       {adjust ? <AdjustSheet product={p} onClose={() => setAdjust(false)} /> : null}
+      {pricing ? <SalePriceSheet product={p} avgCost={avg} onClose={() => setPricing(false)} /> : null}
     </Page>
   );
 }

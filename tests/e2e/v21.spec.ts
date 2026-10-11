@@ -128,10 +128,10 @@ test('v2.1 · recorrido guiado, lecciones con preguntas y consejo del día', asy
   await expect(page.getByTestId('tour-offer')).toBeVisible();
   await page.getByRole('button', { name: 'Hacer el recorrido' }).click();
   const tour = page.getByTestId('tour');
-  await expect(tour).toContainText('paso 1 de 9');
-  for (let i = 2; i <= 9; i++) {
+  await expect(tour).toContainText('paso 1 de 10'); // 2.3: un paso más (análisis, preguntones, me deben y calendario)
+  for (let i = 2; i <= 10; i++) {
     await page.getByTestId('tour-next').click();
-    await expect(tour).toContainText(`paso ${i} de 9`);
+    await expect(tour).toContainText(`paso ${i} de 10`);
     if (i === 3) await page.screenshot({ path: `${SHOTS}/v21-recorrido.png` });
   }
   await page.getByTestId('tour-next').click(); // "Siguiente recorrido": tu primera compra
@@ -139,7 +139,7 @@ test('v2.1 · recorrido guiado, lecciones con preguntas y consejo del día', asy
   await expect(page).toHaveURL(/#\/compras\/nueva/);
   await page.getByTestId('tour-next').click();
   await expect(tour).toContainText('Elige el producto');
-  await tour.getByRole('button', { name: 'Salir' }).click();
+  await tour.getByTestId('tour-skip').click(); // «Omitir»
   await expect(tour).toHaveCount(0);
   await page.goto('/');
   await expect(page.getByTestId('tour-offer')).toHaveCount(0);
@@ -161,7 +161,7 @@ test('v2.1 · recorrido guiado, lecciones con preguntas y consejo del día', asy
   await page.getByTestId('quiz-next').click();
   await expect(page.getByTestId('quiz-result')).toContainText('2 de 3 correctas');
   await page.goto('/#/aprende');
-  await expect(page.getByText('1 de 10 lecciones completadas')).toBeVisible();
+  await expect(page.getByText('1 de 16 lecciones completadas')).toBeVisible();
   await expect(page.getByTestId('lessons').locator('li').first()).toContainText('Hecha');
   await docShot(page, 'v21-aprende');
 });

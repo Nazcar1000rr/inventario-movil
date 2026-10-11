@@ -73,7 +73,7 @@ export function HelpScreen() {
           <ToursCard />
           <Card flush>
             <ul className="list wrap-sub">
-              <ListItem href="/aprende" icon="star" title="Aprende de negocios" sub="10 lecciones cortas: costo, margen, ganancia, caja, capital, precios y más" />
+              <ListItem href="/aprende" icon="star" title="Aprende de negocios" sub="16 lecciones cortas: costo, margen, ganancia, caja, expectativas, 80/20, fiar y más" />
             </ul>
           </Card>
           <PracticeCard />

@@ -16,7 +16,6 @@ import {
   newOpId,
   nowISO,
   setUnitAcquiredAt,
-  setUnitBaseCost,
   setUnitInspection,
   setUnitStatus,
   unitCost,
@@ -64,6 +63,7 @@ import {
 import { compressImage } from '../platform';
 import { navigate } from '../router';
 import { db, toast, useAction, useLive } from '../store';
+import { CorrectUnitCostSheet } from '../components/corrections';
 
 export function UnitDetailScreen({ id }: { id: ID }) {
   const data = useLive(
@@ -128,7 +128,8 @@ export function UnitDetailScreen({ id }: { id: ID }) {
             { label: 'Inspección', icon: 'clipboard', hidden: !pro, onSelect: () => setSheet('inspection') },
             { label: 'Registrar reparación pagada', icon: 'wrench', onSelect: () => setSheet('repair') },
             { label: 'Sumar costo adicional', icon: 'money', hidden: !inStock, onSelect: () => setSheet('extra') },
-            { label: u.baseCost === null ? 'Completar costo' : 'Corregir costo', icon: 'money', hidden: u.source !== 'initial' || (u.baseCost !== null && u.status === 'sold'), onSelect: () => setSheet('cost') },
+            { label: u.baseCost === null ? 'Completar costo' : 'Corregir costo', icon: 'money', hidden: u.source !== 'initial', onSelect: () => setSheet('cost') },
+            { label: 'Corregir costo (en su compra)', icon: 'money', hidden: u.source !== 'purchase' || !u.purchaseId || purchase?.status !== 'active', onSelect: () => navigate(`/compras/${u.purchaseId}?corregir=${u.purchaseLineId ?? '1'}`) },
             { label: u.acquiredAt ? 'Corregir fecha de ingreso' : 'Completar fecha de ingreso', icon: 'clock', hidden: u.source !== 'initial', onSelect: () => setSheet('date') },
             { label: 'Garantía del proveedor', icon: 'shield', hidden: !pro, onSelect: () => setSheet('warranty') },
             { label: 'Dar de baja', icon: 'trash', danger: true, hidden: !inStock, onSelect: writeOff },
@@ -290,7 +291,7 @@ export function UnitDetailScreen({ id }: { id: ID }) {
       {sheet === 'edit' ? <EditUnitSheet unit={u} pro={pro} conditions={settings.conditions} onClose={() => setSheet(null)} /> : null}
       {sheet === 'inspection' ? <InspectionSheet unit={u} onClose={() => setSheet(null)} /> : null}
       {sheet === 'repair' ? <RepairSheet unit={u} onClose={() => setSheet(null)} /> : null}
-      {sheet === 'cost' ? <CostSheet unit={u} onClose={() => setSheet(null)} /> : null}
+      {sheet === 'cost' ? <CorrectUnitCostSheet unit={u} onClose={() => setSheet(null)} /> : null}
       {sheet === 'date' ? <DateSheet unit={u} onClose={() => setSheet(null)} /> : null}
       {sheet === 'extra' ? <ExtraCostSheet unit={u} onClose={() => setSheet(null)} /> : null}
       {sheet === 'status' ? <StatusSheet unit={u} onClose={() => setSheet(null)} /> : null}
@@ -583,30 +584,6 @@ function RepairSheet({ unit, onClose }: { unit: Unit; onClose: () => void }) {
           Guardar reparación
         </button>
       </form>
-    </Sheet>
-  );
-}
-
-function CostSheet({ unit, onClose }: { unit: Unit; onClose: () => void }) {
-  const [cost, setCost] = useState<number | null>(unit.baseCost);
-  const act = useAction();
-  return (
-    <Sheet title={unit.baseCost === null ? 'Completar costo' : 'Corregir costo'} onClose={onClose}>
-      <Field label="Costo de adquisición" htmlFor="uc-cost">
-        <MoneyInput id="uc-cost" value={cost} onChange={setCost} />
-      </Field>
-      {unit.baseCost === null && unit.status === 'sold' ? <Notice>Se actualizará también el costo y la ganancia de la venta de esta unidad.</Notice> : null}
-      <FormError error={act.error} />
-      <button
-        className="btn primary block"
-        disabled={act.busy || cost === null}
-        onClick={async () => {
-          const ok = await act.run(() => setUnitBaseCost(db, unit.id, cost ?? 0).then(() => true), 'Costo guardado');
-          if (ok) onClose();
-        }}
-      >
-        Guardar
-      </button>
     </Sheet>
   );
 }

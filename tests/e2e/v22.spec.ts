@@ -85,7 +85,7 @@ test('v2.2 · lectura en voz alta: recorrido, ⓘ, lección y bocina para silenc
   // Volver a activar: lee el paso actual
   await speaker.click();
   await expect.poll(async () => (await spoken(page)).join(' ')).toContain('Aquí ves lo que vendiste');
-  await page.getByTestId('tour').getByRole('button', { name: 'Salir' }).click();
+  await page.getByTestId('tour').getByRole('button', { name: 'Omitir el recorrido' }).click();
 
   // Explicación ⓘ y ayuda "?"
   await page.goto('/#/capital');

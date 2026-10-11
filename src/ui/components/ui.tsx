@@ -234,6 +234,7 @@ export function MoneyInput({
   invalid,
   placeholder = '0',
   ariaLabel,
+  focusFirst,
 }: {
   id?: string;
   value: number | null;
@@ -241,6 +242,8 @@ export function MoneyInput({
   invalid?: boolean;
   placeholder?: string;
   ariaLabel?: string;
+  /** Recibe el foco al abrir la hoja (en vez del primer campo). */
+  focusFirst?: boolean;
 }) {
   const [text, setText] = useState(value === null ? '' : formatInt(value));
   useEffect(() => {
@@ -261,6 +264,7 @@ export function MoneyInput({
         placeholder={placeholder}
         aria-label={ariaLabel}
         aria-invalid={invalid || undefined}
+        data-autofocus={focusFirst || undefined}
         value={text}
         onChange={(e) => {
           const n = parseMoney(e.target.value);
@@ -335,9 +339,9 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
   );
 }
 
-export function Chips<T extends string>({ value, options, onChange, label }: { value: T; options: [T, string][]; onChange: (v: T) => void; label: string }) {
+export function Chips<T extends string>({ value, options, onChange, label, wrap }: { value: T; options: [T, string][]; onChange: (v: T) => void; label: string; wrap?: boolean }) {
   return (
-    <div className="chips" role="group" aria-label={label}>
+    <div className={`chips${wrap ? ' wrap' : ''}`} role="group" aria-label={label}>
       {options.map(([v, l]) => (
         <button key={v} type="button" className="chip" aria-pressed={v === value} onClick={() => onChange(v)}>
           {l}
@@ -385,7 +389,8 @@ export function Sheet({
     document.body.style.overflow = 'hidden';
     const prevFocus = document.activeElement as HTMLElement | null;
     const t = setTimeout(() => {
-      const el = boxRef.current?.querySelector<HTMLElement>('[data-autofocus], input, select, textarea, button:not(.icon-btn)');
+      const box = boxRef.current;
+      const el = box?.querySelector<HTMLElement>('[data-autofocus]') ?? box?.querySelector<HTMLElement>('input, select, textarea, button:not(.icon-btn)');
       el?.focus({ preventScroll: true });
     }, 50);
     const onKey = (e: KeyboardEvent) => {
