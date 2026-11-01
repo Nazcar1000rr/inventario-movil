@@ -86,6 +86,12 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 - Avisos al abrir: stock bajo, estancados, garantías, cobros pendientes, duplicados y respaldo vencido.
 
 **Ayuda**
+- **Tu negocio (2.4):** al empezar eliges qué vendes y la app muestra solo lo que te sirve; cambias o agregas negocio y apagas o prendes funciones en Configuración.
+- **Exportar a Excel (2.4):** un archivo con inventario, existencias, compras, ventas, gastos, tablas de análisis por día, semana y mes, y gráficas.
+- **Tablas por día, semana y mes (2.4)** y productos que más se mueven, en Análisis → Tablas.
+- **Cotizaciones (2.4):** productos, cantidades, descuento, fecha de validez, envío por WhatsApp y paso a venta.
+- **Comprobante de venta (2.4)** en imagen o PDF, con IMEI y garantía del equipo; **cierre de caja diario**; **ficha del comprador** (lo que compró y lo que debe).
+- **Eliminar un producto de verdad (2.4)** cuando no tiene movimientos; capacidades de 64 GB a 1 TB; el sonido ya no corta la música ni las llamadas; aspecto más limpio; recorridos con ejemplos, zoom, repetir y recorrido completo.
 - **Operaciones por categorías (2.4):** en Operaciones, «Ver» agrupa las ventas por estado de cobro, las compras por proveedor y los gastos por categoría, cada grupo plegable y con su total.
 - **Menús por categorías (2.3):** el botón + y el menú Más agrupados (vender y cobrar, comprar, gastos, tu plata, anotar…).
 - Lista de **primeros pasos**, botón **?** en cada pantalla, **ⓘ** en cada número con su fórmula, **manual con buscador** y "Llévame ahí", **modo práctica** con datos de ejemplo en una base aparte, **novedades** después de actualizar y **manual en PDF**.

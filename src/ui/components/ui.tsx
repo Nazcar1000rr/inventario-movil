@@ -638,3 +638,13 @@ export class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: s
     return this.props.children;
   }
 }
+
+/** Botón «i» que muestra u oculta un detalle largo, para que la pantalla quede limpia. */
+export function InfoMore({ label = 'Más información', children }: { label?: string; children: ReactNode }) {
+  return (
+    <details className="info-more">
+      <summary>{label}</summary>
+      <div>{children}</div>
+    </details>
+  );
+}

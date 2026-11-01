@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  getReceipt,
+  markQuoteSold,
+  getQuote,
   addPayment,
   addRefund,
   checkPrice,
@@ -56,6 +59,9 @@ import {
   TextInput,
 } from '../components/ui';
 import { navigate } from '../router';
+import { shareBinary } from '../platform';
+import { buildImagePdf, canvasToBytes } from '../summary-render';
+import { renderReceiptCanvas } from '../receipt-render';
 import { db, useAction, useLive } from '../store';
 import { L } from '../components/help';
 import { LotSelect } from '../components/lots';
@@ -81,7 +87,7 @@ const newSLine = (product: Product | null = null, unitIds: ID[] = []): SLine => 
 
 const DELIVERY_LABEL: Record<DeliveryStatus, string> = { na: 'No aplica', pending: 'Pendiente de entrega', delivered: 'Entregado' };
 
-export function SaleFormScreen({ inventoryId, productId, unitId, fiado = false, customer = null }: { inventoryId: string | null; productId: string | null; unitId: string | null; fiado?: boolean; customer?: string | null }) {
+export function SaleFormScreen({ inventoryId, productId, unitId, fiado = false, customer = null, quote = null }: { inventoryId: string | null; productId: string | null; unitId: string | null; fiado?: boolean; customer?: string | null; quote?: string | null }) {
   const [inv, setInv, invs] = useDefaultInventory(inventoryId);
   const current = invs?.find((i) => i.id === inv) ?? null;
   const pro = current?.mode === 'pro';
@@ -116,6 +122,33 @@ export function SaleFormScreen({ inventoryId, productId, unitId, fiado = false, 
     const p = initial?.p;
     if (p && p.inventoryId === inv) setLines((ls) => (ls.length === 1 && !ls[0].product ? [newSLine(p, unitId ? [unitId] : [])] : ls));
   }, [initial, inv, unitId]);
+
+  // Cotización: trae los productos, cantidades, precios, descuento y comprador
+  const fromQuote = useLive(async (d) => (quote ? (await getQuote(d, quote)) ?? null : null), [quote]);
+  const [quoteLoaded, setQuoteLoaded] = useState<string | null>(null);
+  const [quoteSkipped, setQuoteSkipped] = useState<string[]>([]);
+  useEffect(() => {
+    if (!fromQuote || quoteLoaded === fromQuote.id || fromQuote.status !== 'open') return;
+    void (async () => {
+      const ps = await db.products.bulkGet(fromQuote.lines.map((l) => l.productId ?? ''));
+      const first = ps.find((p) => p);
+      const invId = fromQuote.inventoryId ?? first?.inventoryId ?? null;
+      if (invId) setInv(invId);
+      const ok: SLine[] = [];
+      const skipped: string[] = [];
+      fromQuote.lines.forEach((l, i) => {
+        const p = ps[i];
+        if (p && (!invId || p.inventoryId === invId)) ok.push({ ...newSLine(p), qty: l.quantity, price: l.unitPrice });
+        else skipped.push(l.name);
+      });
+      if (ok.length) setLines(ok);
+      setQuoteSkipped(skipped);
+      setDiscount(fromQuote.discount > 0 ? fromQuote.discount : null);
+      if (fromQuote.customerId) setCustomerId(fromQuote.customerId);
+      setQuoteLoaded(fromQuote.id);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromQuote, quoteLoaded]);
 
   // Disponibilidad y costos estimados en vivo
   const productIds = lines.map((l) => l.product?.id).filter(Boolean) as ID[];
@@ -238,6 +271,7 @@ export function SaleFormScreen({ inventoryId, productId, unitId, fiado = false, 
     );
     setConfirming(false);
     if (s) {
+      if (quote) await markQuoteSold(db, quote, s.id);
       setOpId(newOpId());
       navigate(`/ventas/${s.id}`, { replace: true });
     }
@@ -261,6 +295,11 @@ export function SaleFormScreen({ inventoryId, productId, unitId, fiado = false, 
             if (validate()) setConfirming(true);
           }}
         >
+          {fromQuote && quoteLoaded ? (
+            <Notice kind={quoteSkipped.length ? 'warn' : 'info'} title={`Viene de la cotización N.º ${fromQuote.number}`}>
+              Revisa los productos y registra la venta.{quoteSkipped.length ? ` No se pudo agregar: ${quoteSkipped.join(', ')}. Agrégalo a mano.` : ''}
+            </Notice>
+          ) : null}
           <Field label="Inventario de origen" htmlFor="sa-inv">
             <InventorySelect
               id="sa-inv"
@@ -549,7 +588,7 @@ export function SaleDetailScreen({ id }: { id: ID }) {
     },
     [id],
   );
-  const [sheet, setSheet] = useState<null | 'payment' | 'refund' | 'return' | 'edit'>(null);
+  const [sheet, setSheet] = useState<null | 'payment' | 'refund' | 'return' | 'edit' | 'receipt'>(null);
   const act = useAction();
   if (data === undefined) return <Page title="Venta" back="/operaciones?tab=ventas"><Loading /></Page>;
   if (data === null) return <Page title="Venta" back="/operaciones?tab=ventas"><Empty title="La venta no existe" /></Page>;
@@ -587,6 +626,7 @@ export function SaleDetailScreen({ id }: { id: ID }) {
           <ActionMenu
             title="Venta"
             actions={[
+              { label: 'Comprobante (imagen o PDF)', icon: 'share', onSelect: () => setSheet('receipt') },
               { label: 'Registrar pago', icon: 'money', hidden: bal.pending <= 0, onSelect: () => setSheet('payment') },
               { label: 'Registrar devolución', icon: 'return', hidden: !canReturn, onSelect: () => setSheet('return') },
               { label: 'Reembolsar saldo a favor', icon: 'money', hidden: bal.credit <= 0, onSelect: () => setSheet('refund') },
@@ -766,6 +806,7 @@ export function SaleDetailScreen({ id }: { id: ID }) {
       {sheet === 'refund' ? <PaymentSheet sale={sale} kind="refund" max={bal.credit} onClose={() => setSheet(null)} /> : null}
       {sheet === 'return' ? <ReturnSheet sale={sale} lines={lines} collected={bal.collected} products={products} units={units} pro={pro} onClose={() => setSheet(null)} /> : null}
       {sheet === 'edit' ? <EditSaleSheet sale={sale} onClose={() => setSheet(null)} /> : null}
+      {sheet === 'receipt' ? <ReceiptSheet saleId={sale.id} onClose={() => setSheet(null)} /> : null}
     </Page>
   );
 }
@@ -952,6 +993,35 @@ function ReturnSheet({
       </div>
       <p className="small">Valor de lo devuelto: <strong>{formatCOP(amount)}</strong></p>
       <FormError error={act.field === 'refundAmount' ? null : act.error} />
+    </Sheet>
+  );
+}
+
+function ReceiptSheet({ saleId, onClose }: { saleId: ID; onClose: () => void }) {
+  const act = useAction();
+  const share = async (kind: 'png' | 'pdf') => {
+    const out = await act.run(async () => {
+      const r = await getReceipt(db, saleId);
+      const canvas = renderReceiptCanvas(r);
+      const base = `comprobante-${r.number}`;
+      return kind === 'png'
+        ? shareBinary(`${base}.png`, await canvasToBytes(canvas, 'image/png'), 'image/png', 'Enviar comprobante')
+        : shareBinary(`${base}.pdf`, buildImagePdf(await canvasToBytes(canvas, 'image/jpeg', 0.92), canvas.width, canvas.height), 'application/pdf', 'Enviar comprobante');
+    });
+    if (out && out !== 'cancelled') onClose();
+  };
+  return (
+    <Sheet title="Comprobante de venta" onClose={onClose}>
+      <div className="stack">
+        <p className="small">Crea un comprobante con lo vendido, el total, lo pagado y lo que falta. Si el equipo tiene IMEI y garantía, también salen. Elige cómo enviarlo: WhatsApp, correo, Drive…</p>
+        <button className="btn primary block" disabled={act.busy} onClick={() => void share('png')} data-testid="receipt-png">
+          <Icon name="share" /> Enviar como imagen
+        </button>
+        <button className="btn block" disabled={act.busy} onClick={() => void share('pdf')} data-testid="receipt-pdf">
+          <Icon name="share" /> Enviar como PDF
+        </button>
+        <FormError error={act.error} />
+      </div>
     </Sheet>
   );
 }

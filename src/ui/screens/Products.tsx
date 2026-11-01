@@ -9,6 +9,8 @@ import {
   newOpId,
   nowISO,
   registerInitialStock,
+  checkProductDelete,
+  deleteProduct,
   setProductArchived,
   TRACKING_LABEL,
   unitCost,
@@ -266,6 +268,26 @@ export function ProductDetailScreen({ id }: { id: ID }) {
                   confirmText: p.archived ? 'Reactivar' : 'Archivar',
                 });
                 if (ok) await act.run(() => setProductArchived(db, id, !p.archived), p.archived ? 'Producto reactivado' : 'Producto archivado');
+              },
+            },
+            {
+              label: 'Eliminar producto',
+              icon: 'trash',
+              onSelect: async () => {
+                const check = await checkProductDelete(db, id);
+                if (!check.canDelete) {
+                  await confirmAction({ title: 'No se puede eliminar', message: check.reason ?? '', confirmText: 'Entendido', cancelText: 'Cerrar' });
+                  return;
+                }
+                const ok = await confirmAction({
+                  title: 'Eliminar producto',
+                  message: `Se borra "${p.name}" para siempre${check.units ? `, con sus ${check.units} unidad(es)` : ''}${check.movements ? ` y ${check.movements} movimiento(s) de stock` : ''}. No se puede deshacer, pero tus ventas, compras y cuentas no cambian. Si solo quieres que no aparezca, mejor archívalo.`,
+                  confirmText: 'Eliminar',
+                  danger: true,
+                });
+                if (!ok) return;
+                const done = await act.run(() => deleteProduct(db, id, { opId: newOpId() }).then(() => true), 'Producto eliminado');
+                if (done) navigate(`/inventarios/${inv.id}`);
               },
             },
           ]}

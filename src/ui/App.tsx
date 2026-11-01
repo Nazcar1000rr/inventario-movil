@@ -6,7 +6,9 @@ import { practice } from './store';
 import { TourHost } from './tour';
 import { SpeechBar } from './components/speechbar';
 import { MORE_GROUPS, QUICK_GROUPS } from './menu';
+import { useBusiness, visibleMore, visibleQuick } from './features';
 import { MemosScreen } from './screens/Memos';
+import { useShowWelcome, WelcomeScreen } from './screens/Business';
 import { BackupScreen } from './screens/Backup';
 import { CapitalScreen } from './screens/Capital';
 import { DebtDetailScreen, DebtsScreen } from './screens/Debts';
@@ -29,6 +31,8 @@ import { ProductDetailScreen, ProductFormScreen, StockEntryScreen } from './scre
 import { PurchaseDetailScreen, PurchaseFormScreen } from './screens/Purchases';
 import { ReportsScreen } from './screens/Reports';
 import { SaleDetailScreen, SaleFormScreen } from './screens/Sales';
+import { CashCloseScreen } from './screens/CashClose';
+import { QuoteDetailScreen, QuoteFormScreen, QuotesScreen } from './screens/Quotes';
 import { MoreScreen, SearchScreen, SettingsScreen } from './screens/Settings';
 import { UnitDetailScreen } from './screens/Unit';
 import { ViewDetailScreen, ViewsScreen } from './screens/Views';
@@ -55,7 +59,7 @@ function resolve(seg: string[], q: URLSearchParams): ReactNode {
       if (b === 'nueva') return <PurchaseFormScreen inventoryId={q.get('inv')} productId={q.get('product')} />;
       return b ? <PurchaseDetailScreen id={b} /> : <OperationsScreen tab="compras" />;
     case 'ventas':
-      if (b === 'nueva') return <SaleFormScreen key={q.get('fiado') ?? ''} inventoryId={q.get('inv')} productId={q.get('product')} unitId={q.get('unit')} fiado={q.get('fiado') === '1'} customer={q.get('cliente')} />;
+      if (b === 'nueva') return <SaleFormScreen key={`${q.get('fiado') ?? ''}${q.get('cotizacion') ?? ''}`} inventoryId={q.get('inv')} productId={q.get('product')} unitId={q.get('unit')} fiado={q.get('fiado') === '1'} customer={q.get('cliente')} quote={q.get('cotizacion')} />;
       return b ? <SaleDetailScreen id={b} /> : <OperationsScreen tab="ventas" />;
     case 'operaciones':
       return <OperationsScreen tab={(q.get('tab') as 'ventas' | 'compras' | 'gastos') ?? 'ventas'} />;
@@ -66,6 +70,12 @@ function resolve(seg: string[], q: URLSearchParams): ReactNode {
       return b ? <PartyDetailScreen type="supplier" id={b} /> : <PartiesScreen type="supplier" />;
     case 'compradores':
       return b ? <PartyDetailScreen type="customer" id={b} /> : <PartiesScreen type="customer" />;
+    case 'cotizaciones':
+      if (b === 'nueva') return <QuoteFormScreen />;
+      if (b && c === 'editar') return <QuoteFormScreen id={b} />;
+      return b ? <QuoteDetailScreen id={b} /> : <QuotesScreen />;
+    case 'cierre-caja':
+      return <CashCloseScreen />;
     case 'garantias':
       return b ? <WarrantyDetailScreen id={b} /> : <WarrantiesScreen />;
     case 'informes':
@@ -133,9 +143,16 @@ const SIDE_MAIN: { href: string; label: string; icon: string; key: string }[] = 
 export function App() {
   const route = useRoute();
   const [quick, setQuick] = useState(false);
+  const biz = useBusiness();
+  const moreGroups = visibleMore(MORE_GROUPS, biz);
+  const quickGroups = visibleQuick(QUICK_GROUPS, biz);
   const seg = route.segments;
+  const showWelcome = useShowWelcome();
   const sideKey = seg[0] === 'operaciones' ? route.query.get('tab') ?? 'ventas' : seg[0] ?? '';
   return (
+    showWelcome ? (
+      <WelcomeScreen />
+    ) : (
     <div className={`app${practice ? ' practice' : ''}`}>
       <PracticeBanner />
       <nav className="side-nav" aria-label="Secciones">
@@ -150,7 +167,7 @@ export function App() {
             <Icon name={n.icon} size={20} /> {n.label}
           </a>
         ))}
-        {MORE_GROUPS.map((g, gi) => (
+        {moreGroups.map((g, gi) => (
           <div key={g.title} className="side-group" data-tour={gi === 0 ? 'nav-mas' : undefined}>
             <p className="side-title">{g.title}</p>
             {g.items.map((n) => (
@@ -195,7 +212,7 @@ export function App() {
       {quick ? (
         <Sheet title="Registrar" onClose={() => setQuick(false)}>
           <div className="quick-groups" data-testid="quick-menu">
-            {QUICK_GROUPS.map((g) => (
+            {quickGroups.map((g) => (
               <section key={g.title} className="quick-group" aria-label={g.title}>
                 <h3 className="quick-title">{g.title}</h3>
                 <div className="quick-grid">
@@ -228,5 +245,6 @@ export function App() {
       <AskHost />
       <ToastHost />
     </div>
+    )
   );
 }

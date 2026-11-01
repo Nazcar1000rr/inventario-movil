@@ -233,6 +233,67 @@ export async function setProductArchived(db: AppDB, id: ID, archived: boolean): 
   });
 }
 
+/* ---------------- Eliminar un producto de verdad (v2.4) ---------------- */
+
+export interface ProductDeleteCheck {
+  canDelete: boolean;
+  /** Por qué no se puede (null si se puede). */
+  reason: string | null;
+  /** Lo que se borraría junto con el producto. */
+  units: number;
+  lots: number;
+  movements: number;
+}
+
+/**
+ * Un producto solo se elimina de verdad si nunca se vendió ni se compró y no tiene gastos ni garantías:
+ * así las ventas, las compras y el capital no cambian. Lo que sí se borra con él: sus unidades, lotes, entradas de
+ * stock que ya tenías, ajustes e historial. Si ya tiene compras o ventas, se archiva (el historial se conserva).
+ */
+export async function checkProductDelete(db: AppDB, id: ID): Promise<ProductDeleteCheck> {
+  const p = await requireProduct(db, id);
+  const unitIds = (await db.units.where('productId').equals(id).primaryKeys()) as ID[];
+  const lots = await db.lots.where('productId').equals(id).count();
+  const movements = await db.movements.where('productId').equals(id).count();
+  const base = { units: unitIds.length, lots, movements };
+  const sales = await db.saleLines.where('productId').equals(id).count();
+  if (sales > 0) return { ...base, canDelete: false, reason: `"${p.name}" tiene ventas registradas. Para no cambiar tus cuentas no se puede eliminar: archívalo (el historial se conserva).` };
+  const purchases = await db.purchaseLines.where('productId').equals(id).count();
+  if (purchases > 0) return { ...base, canDelete: false, reason: `"${p.name}" tiene compras registradas. Para no cambiar tus cuentas no se puede eliminar: archívalo (el historial se conserva).` };
+  const warranties = unitIds.length ? await db.warranties.where('unitId').anyOf(unitIds).count() : 0;
+  if (warranties > 0) return { ...base, canDelete: false, reason: `"${p.name}" tiene garantías registradas.` };
+  const expenses = await db.expenses.filter((e) => e.productId === id || (!!e.unitId && unitIds.includes(e.unitId))).count();
+  if (expenses > 0) return { ...base, canDelete: false, reason: `"${p.name}" tiene gastos registrados (reparaciones, envíos…). Elimina esos gastos primero o archívalo.` };
+  return { ...base, canDelete: true, reason: null };
+}
+
+export async function deleteProduct(db: AppDB, id: ID, opts: { opId?: string } = {}): Promise<void> {
+  await tx(db, async () => {
+    if (!(await claimOp(db, opts.opId))) return;
+    const p = await requireProduct(db, id);
+    const check = await checkProductDelete(db, id);
+    if (!check.canDelete) fail('has_records', check.reason ?? 'No se puede eliminar este producto.');
+    const unitIds = (await db.units.where('productId').equals(id).primaryKeys()) as ID[];
+    if (unitIds.length) {
+      await db.photos.where('unitId').anyOf(unitIds).delete();
+      await db.repairs.where('unitId').anyOf(unitIds).delete();
+      await db.units.bulkDelete(unitIds);
+    }
+    await db.lots.where('productId').equals(id).delete();
+    await db.movements.where('productId').equals(id).delete();
+    // Los preguntones de este producto se conservan, sin producto
+    await db.inquiries.where('productId').equals(id).modify({ productId: null });
+    await db.products.delete(id);
+    await logHistory(db, {
+      entityType: 'product',
+      entityId: id,
+      inventoryId: p.inventoryId,
+      action: 'delete',
+      summary: `Producto eliminado: ${p.name} (${check.units} unidad(es), ${check.movements} movimiento(s))`,
+    });
+  });
+}
+
 /* ---------------- Creación de unidades ---------------- */
 
 export interface UnitDetails {

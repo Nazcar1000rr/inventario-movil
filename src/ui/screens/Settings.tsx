@@ -7,15 +7,18 @@ import { Card, confirmAction, Empty, Field, FormError, IntInput, KV, ListItem, L
 import { getStorageStatus, isIOS, isNative, platformName, requestPersistence, type StorageStatus } from '../platform';
 import { useRoute } from '../router';
 import { MORE_GROUPS } from '../menu';
+import { useBusiness, visibleMore } from '../features';
+import { BusinessCard } from './Business';
 import { db, useAction, useLive } from '../store';
 import { canIgnoreSilentSwitch, PACKS, playSound, setIgnoreSilent, setPack, setSoundOn, setToneOverride, setVolume, SOUNDS, useSoundPrefs, type PackId } from '../sound';
 
 declare const __APP_VERSION__: string;
 
 export function MoreScreen() {
+  const biz = useBusiness();
   return (
     <Page title="Más" help="more">
-      {MORE_GROUPS.map((g) => (
+      {visibleMore(MORE_GROUPS, biz).map((g) => (
         <Card key={g.title} title={g.title}>
           <div className="quick-grid" data-testid="more-group">
             {g.items.map((n) => (
@@ -79,6 +82,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const methods = [...new Set([...PAYMENT_METHODS, ...Object.keys(s.paymentFees)])];
   return (
     <Page title="Configuración" help="settings" back="/mas">
+      <BusinessCard />
       <form
         className="stack"
         onSubmit={async (e) => {
@@ -374,7 +378,7 @@ export function SoundsCard() {
             </label>
             <p className="tiny muted">
               {canIgnoreSilentSwitch()
-                ? 'También aplica a la lectura en voz alta. Si estás escuchando música en otra app, puede pausarse o bajar mientras suena la app.'
+                ? 'Normalmente los sonidos se mezclan con tu música y no la pausan. Si activas esto, el teléfono puede pausar o bajar la música mientras suena la app. La lectura en voz alta sí puede pausar la música mientras habla.'
                 : 'Esta opción necesita iOS 17 o superior. Con el iPhone en silencio, los sonidos no se oyen.'}
             </p>
           </div>

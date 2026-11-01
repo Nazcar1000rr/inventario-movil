@@ -117,12 +117,16 @@ export function setIgnoreSilent(on: boolean): void {
   dropCtx();
   emit();
 }
-/** "playback" suena aunque el interruptor de silencio esté activado; "auto" respeta el silencio. */
+/**
+ * v2.4: "ambient" se MEZCLA con la música, las llamadas y otras apps (no las pausa) y respeta el modo silencio.
+ * "playback" suena aunque el interruptor de silencio esté activado, pero el teléfono pausa el audio de otras apps:
+ * por eso solo se usa si la persona lo pidió (Apariencia → «Sonar aunque el iPhone esté en silencio»).
+ */
 export function applyAudioSession(): void {
   const s = audioSession();
   if (!s) return;
   try {
-    s.type = getIgnoreSilent() ? 'playback' : 'auto';
+    s.type = getIgnoreSilent() ? 'playback' : 'ambient';
   } catch {
     /* no disponible: se ignora */
   }
@@ -166,6 +170,27 @@ let noiseBuffer: AudioBuffer | null = null;
  */
 let ctx: AudioContext | null = null;
 let needsFresh = false;
+/**
+ * v2.4: un contexto de audio "corriendo" mantiene tomada la sesión de audio del teléfono aunque no suene nada, y eso
+ * pausa o baja la música (Spotify) y otros audios. Por eso se suspende a los pocos segundos de silencio y se
+ * despierta solo cuando va a sonar algo.
+ */
+const IDLE_SUSPEND_MS = 2500;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+let idleSuspended = false;
+function scheduleIdleSuspend(): void {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    idleTimer = null;
+    const c = ctx;
+    if (c && (c.state as string) === 'running') {
+      idleSuspended = true;
+      void c.suspend().catch(() => {
+        idleSuspended = false;
+      });
+    }
+  }, IDLE_SUSPEND_MS);
+}
 let wasHidden = false;
 let audioRestarts = 0;
 /** Estado del audio (solo para las pruebas automáticas). */
@@ -189,6 +214,9 @@ function makeCtx(): AudioContext | null {
 function dropCtx(): void {
   const old = ctx;
   ctx = null;
+  idleSuspended = false;
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = null;
   needsFresh = false;
   noiseBuffer = null;
   lastTap = null;
@@ -233,6 +261,8 @@ function resumeOrRenew(ac: AudioContext, then?: (ac: AudioContext) => void): voi
 /** Se llama en cada toque (antes del clic): despierta el audio si la app estuvo en segundo plano. */
 function unlockAudio(): void {
   if (!ctx) return; // se crea con el primer sonido
+  // Suspendido por reposo (v2.4): no se despierta con cada toque; lo despierta playSound cuando va a sonar algo
+  if (idleSuspended && !wasHidden && (ctx.state as string) === 'suspended') return;
   const st = ctx.state as string;
   if (st === 'running') {
     wasHidden = false;
@@ -442,6 +472,7 @@ export function playSound(name: SoundName, opts: { pack?: PackId; force?: boolea
   if (vol <= 0) return;
   const ac = audio();
   if (!ac) return;
+  idleSuspended = false;
   if ((ac.state as string) === 'running') render(ac, name, pack, vol);
   // En pausa (o interrumpido): suena apenas arranque; si no arranca, el próximo toque crea un audio nuevo
   else resumeOrRenew(ac, (a) => render(a, name, pack, vol));
@@ -460,6 +491,7 @@ function render(ac: AudioContext, name: SoundName, pack: PackId, vol: number): v
     master.connect(ac.destination);
     for (const n of RECIPES[pack][name]) schedule(ac, master, n, now);
     if (name === 'tap') lastTap = { at: performance.now(), gain: master };
+    scheduleIdleSuspend();
   } catch {
     /* el audio no es esencial: si falla, la app sigue igual */
   }

@@ -41,6 +41,9 @@ export function ToursCard() {
         >
           <Icon name="play" /> Repetir primeros pasos
         </button>
+        <button type="button" className="btn block" data-testid="tour-all" onClick={() => startTour('all')}>
+          <Icon name="play" /> Recorrido completo (todos los temas)
+        </button>
         <ul className="list wrap-sub" data-testid="tours-list">
           {TOURS.map((t) => (
             <ListItem

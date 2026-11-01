@@ -10,6 +10,10 @@ type Seed = [generation: string, model: string, year: number, storage: string[],
 const S = (...gb: (number | string)[]) => gb.map((x) => (typeof x === 'number' ? `${x} GB` : x));
 
 const IPHONES: Seed[] = [
+  ['iPhone 7', 'iPhone 7', 2016, S(32, 128, 256), 'touchid'],
+  ['iPhone 7', 'iPhone 7 Plus', 2016, S(32, 128, 256), 'touchid'],
+  ['iPhone 8', 'iPhone 8', 2017, S(64, 128, 256), 'touchid'],
+  ['iPhone 8', 'iPhone 8 Plus', 2017, S(64, 128, 256), 'touchid'],
   ['iPhone X', 'iPhone X', 2017, S(64, 256), 'faceid'],
   ['iPhone XS / XR', 'iPhone XR', 2018, S(64, 128, 256), 'faceid'],
   ['iPhone XS / XR', 'iPhone XS', 2018, S(64, 256, 512), 'faceid'],
@@ -100,6 +104,37 @@ export function builtinCatalog(createdAt: string): CatalogModel[] {
     createdAt,
   }));
   return [...phones, ...audio];
+}
+
+/**
+ * Capacidades de almacenamiento para cualquier celular (v2.4): de 64 GB a 1000 GB (1 TB).
+ * Los modelos del catálogo traen sus propias opciones; esta lista sirve para cualquier otro celular o marca.
+ */
+export const PHONE_CAPACITIES: string[] = ['64 GB', '128 GB', '256 GB', '512 GB', '1 TB'];
+
+/** Valor en GB de una capacidad escrita ("128 GB", "1 TB", "1000 GB", "2tb"); null si no se entiende. */
+export function capacityGB(text: string): number | null {
+  const m = /^\s*(\d+(?:[.,]\d+)?)\s*(gb|g|tb|t)?\s*$/i.exec(text ?? '');
+  if (!m) return null;
+  const n = Number(m[1].replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const unit = (m[2] ?? 'gb').toLowerCase();
+  return unit.startsWith('t') ? n * 1000 : n;
+}
+
+/** Capacidades para elegir: las del modelo y, si se piden, todas las de {@link PHONE_CAPACITIES}, de menor a mayor y sin repetir. */
+export function capacityChoices(modelOptions: string[], all: boolean): string[] {
+  const list = all ? [...modelOptions, ...PHONE_CAPACITIES] : [...modelOptions];
+  const seen = new Set<number | string>();
+  const out: string[] = [];
+  for (const c of list) {
+    const gb = capacityGB(c);
+    const key = gb ?? c;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+  }
+  return out.sort((a, b) => (capacityGB(a) ?? 1e9) - (capacityGB(b) ?? 1e9));
 }
 
 /** Puntos de la lista de inspección profesional de teléfonos usados. */

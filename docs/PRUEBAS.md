@@ -7,7 +7,7 @@ Entorno:
 - Vitest 5.0.3 + fake-indexeddb 6.2.5: implementación de IndexedDB conforme al estándar, sobre la que corre el mismo código Dexie de la app.
 - Playwright 1.56 con Chromium 141 (compilación 1194), contra la **compilación de producción** (`npm run build` + `vite preview`).
 
-**Resultado (2.4.0): 121/121 pruebas de lógica y 37/37 pruebas de extremo a extremo aprobadas** (en esta ejecución se usó el Chromium 1243 que trae el entorno, no el 1194; la suite completa dio 36 aprobadas y 1 caída que se arregló y se volvió a correr aprobada, ver abajo). `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+**Resultado (2.4.0, versión completa): 144/144 pruebas de lógica aprobadas.** De extremo a extremo (Chromium 1243 del entorno, no el 1194) se corrieron solo las pantallas que cambiaron y las que podían verse afectadas: `v24`, `v24b` (3 pruebas nuevas), `all-screens`, `flow`, `screens`, `v21` y `v22`, todas aprobadas; **no** se repitió la suite completa de ~9 minutos. `tsc` (modo estricto) no reporta errores.
 
 ## Versión 2.4: qué se probó
 
@@ -16,11 +16,20 @@ Entorno:
 | Operaciones por categorías | E2E (Chromium): ventas por estado de cobro (por cobrar $ 1.100.000 y pagadas $ 2.000.000, sin grupo de anuladas), plegar y desplegar un grupo, la elección se recuerda al cambiar de pestaña, gastos por categoría (Publicidad, Empaques), compras por proveedor («Sin proveedor»), volver a «Por fecha» quita los grupos, sin desborde horizontal; capturas revisadas a la vista | ✅ |
 | .ics a 75 octetos | Unit: título y descripción con tildes, ñ, ✓ y emojis; ninguna línea pasa de 75 bytes y al desdoblar queda el texto igual | ✅ |
 
+| Tablas por día, semana y mes | Unit: periodos en orden y en hora local; el total de los días de una semana = el de la semana = el del mes; compras y ganancia a costo real; productos que más se mueven suman lo mismo que el periodo; sin ventas no hay filas. E2E: cambiar día/semana/mes, fila de total, «en curso», producto en la tabla | ✅ |
+| Excel | Unit: nombres de columna y hoja, fechas, caracteres especiales (&, <, tildes, control) bien formados, las 10 hojas y 3 gráficas, base vacía. **Validado con openpyxl** (hojas, filas, filtros, encabezado fijo, 3 gráficas, formatos de fecha y moneda) y **LibreOffice** (lo abre y convierte a PDF; las gráficas se dibujan, revisado a la vista). E2E: descarga `inventario-movil-AAAA-MM-DD.xlsx`, es un zip válido. **No se abrió en Microsoft Excel** | ✅ (LibreOffice/openpyxl) |
+| Cotizaciones | Unit: numeración, total y descuento, vigente/vencida, mensaje de WhatsApp, cancelar/reactivar, editar, marcar vendida (ya no se edita), borrar y validaciones. E2E: crear con producto y concepto libre → detalle → «Convertir en venta» (avisa que el concepto escrito a mano no es producto) → venta registrada → la cotización queda «Vendida» | ✅ |
+| Comprobante y cierre de caja | Unit: comprobante con líneas, total, pagado y saldo; cierre: cobros por medio, ventas de otros días no cuentan, fiado, gastos, diferencia, cerrar de nuevo reemplaza. E2E: comprobante PNG descargado, cierre guardado con su diferencia | ✅ |
+| Eliminar producto, capacidades, negocio | Unit y E2E: se elimina solo sin movimientos; lista corta y «Ver todas» (1 TB); bienvenida «Ventas de la calle» oculta celulares, cotizaciones y catálogo y crea «Mi puesto»; apagar y prender Preguntones | ✅ |
+| Recorridos | E2E: recorrido completo, «Para qué sirve» y «Ejemplo», repetir paso, repetir tema, omitir | ✅ |
+
+**Errores reales encontrados y corregidos (2.4, versión completa):** (1) al eliminar un producto la pantalla se quedaba en «El producto no existe» en vez de volver al inventario; (2) un inventario recién creado con productos de ejemplo mostraba la lista vacía porque ocultaba lo agotado; (3) frases con «toque» como sustantivo en textos nuevos (lo detecta la prueba de tono); (4) las pruebas de las tablas suponían mal que el precio de una línea de compra es por unidad (es el total de la línea).
+
 **Error real encontrado y corregido (2.4):** el archivo .ics doblaba las líneas por caracteres y no por bytes; con tildes o emojis las líneas pasaban de 75 octetos.
 
 **Prueba corregida (2.4):** `v23.spec.ts` (calendario) fallaba el último día del mes porque «mañana» caía en el mes siguiente y la cuadrícula muestra el mes actual; ahora avanza de mes cuando hace falta. No era un fallo de la app.
 
-**No probado aquí (2.4):** igual que la 2.3 (teléfono físico, Safari), y la publicación: no se pudo subir el código a GitHub desde esta sesión (el token no sirvió), así que CI, Pages y la firma del APK de la 2.4.0 **no** están verificados.
+**No probado aquí (2.4):** teléfono físico y Safari (igual que la 2.3). En especial **no se probó en un teléfono real** que el audio ya no pause Spotify o una llamada, ni la lectura en voz alta (puede seguir bajando la música), ni compartir comprobantes o el Excel desde el menú del sistema, ni abrir el Excel en Microsoft Excel. La publicación (CI, Pages y firma del APK) se verifica aparte, ver README.
 
 ## Versión 2.3: qué se probó
 

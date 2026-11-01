@@ -1,3 +1,4 @@
+import { useFeature } from '../features';
 import { useMemo, useState } from 'react';
 import {
   createInventory,
@@ -184,14 +185,17 @@ export function InventoryDetailScreen({ id }: { id: ID }) {
   const [kind, setKind] = useState<'all' | ProductKind>('all');
   const [q, setQ] = useState('');
   const [showEmpty, setShowEmpty] = useState(false);
+  const phonesOn = useFeature('phones');
   const act = useAction();
+  // Inventario recién creado (con productos pero sin existencias todavía): se muestran los productos para poder empezar
+  const noStockYet = !!rows && rows.some((r) => !r.archived) && rows.every((r) => r.archived || r.available + r.inReview + r.damaged === 0);
 
   const filtered = useMemo(() => {
     const nq = normalizeText(q);
     return (rows ?? []).filter(
-      (r) => (kind === 'all' || r.kind === kind) && (!nq || normalizeText(r.name).includes(nq)) && (showEmpty ? true : !r.archived && r.available + r.inReview + r.damaged > 0),
+      (r) => (kind === 'all' || r.kind === kind) && (!nq || normalizeText(r.name).includes(nq)) && (showEmpty ? true : !r.archived && (noStockYet || r.available + r.inReview + r.damaged > 0)),
     );
-  }, [rows, kind, q, showEmpty]);
+  }, [rows, kind, q, showEmpty, noStockYet]);
 
   if (inv === undefined) return <Page title="Inventario" back="/inventarios"><Loading /></Page>;
   if (inv === null || !inv) return <Page title="Inventario" back="/inventarios"><Empty title="El inventario no existe" /></Page>;
@@ -302,7 +306,7 @@ export function InventoryDetailScreen({ id }: { id: ID }) {
         onChange={setKind}
         options={[
           ['all', 'Todos'],
-          ['phone', 'Teléfonos'],
+          ...(phonesOn ? ([['phone', 'Teléfonos']] as ['all' | ProductKind, string][]) : []),
           ['audio', 'Audífonos'],
           ['accessory', 'Accesorios'],
           ['other', 'Otros'],

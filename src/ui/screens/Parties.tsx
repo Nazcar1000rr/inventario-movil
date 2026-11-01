@@ -98,7 +98,11 @@ export function PartyDetailScreen({ type, id }: { type: 'supplier' | 'customer';
       const balances = await Promise.all(
         sales.map(async (s) => computeSaleBalance(s, await d.saleLines.where('saleId').equals(s.id).toArray(), await d.payments.where('saleId').equals(s.id).toArray())),
       );
-      return { kind: 'customer' as const, party: c, sales, balances };
+      const lineSets = await Promise.all(sales.map((s) => d.saleLines.where('saleId').equals(s.id).toArray()));
+      const prods = new Map((await d.products.bulkGet([...new Set(lineSets.flat().map((l) => l.productId))])).filter(Boolean).map((p) => [p!.id, p!.name]));
+      const items = lineSets.map((ls) => ls.map((l) => `${l.quantity > 1 ? `${l.quantity} × ` : ''}${prods.get(l.productId) ?? 'Producto'}`));
+      const warranties = (await d.warranties.where('customerId').equals(id).toArray()).filter((w) => w.status === 'active');
+      return { kind: 'customer' as const, party: c, sales, balances, items, warranties };
     },
     [id, type],
   );
@@ -162,6 +166,34 @@ export function PartyDetailScreen({ type, id }: { type: 'supplier' | 'customer';
               ['Saldo pendiente', formatCOP(data.balances.reduce((a, b) => a + b.pending, 0))],
             ]}
           />
+        </Card>
+      ) : null}
+      {data.kind === 'customer' ? (
+        <Card title="Lo que ha comprado" tour="customer-history">
+          {data.sales.length === 0 ? (
+            <p className="small muted">Todavía no le has vendido nada.</p>
+          ) : (
+            <ul className="list" data-testid="customer-purchases">
+              {data.sales.map((sale, i) => {
+                const b = data.balances[i];
+                return (
+                  <li key={sale.id}>
+                    <a className="list-item" href={`#/ventas/${sale.id}`}>
+                      <div className="grow">
+                        <strong className="wrap-anywhere">{data.items[i].join(', ') || 'Venta'}</strong>
+                        <div className="small muted">{formatDate(sale.date)}{sale.status === 'voided' ? ' · anulada' : ''}</div>
+                      </div>
+                      <div className="right">
+                        <strong>{formatCOP(b.effective)}</strong>
+                        {b.pending > 0 ? <div className="small delta-down">Debe {formatCOP(b.pending)}</div> : null}
+                      </div>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {data.warranties.length ? <p className="small muted">Garantías vigentes: {data.warranties.length}. <a href="#/garantias">Ver garantías</a></p> : null}
         </Card>
       ) : null}
       <Card title="Datos">

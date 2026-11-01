@@ -19,6 +19,10 @@ export interface TourStep {
   target?: string;
   title: string;
   text: string;
+  /** Para qué sirve (una frase corta). */
+  purpose?: string;
+  /** Un ejemplo con números o una situación real. */
+  example?: string;
 }
 
 export interface Tour {
@@ -39,8 +43,8 @@ export const TOURS: Tour[] = [
     minutes: 1,
     steps: [
       { route: '/', title: '¡Hola! Te muestro la app', text: 'Es un recorrido de un minuto. Puedes omitirlo cuando quieras con «Omitir» y repetirlo desde Ayuda → Recorridos guiados.' },
-      { route: '/', target: 'kpis', title: 'Tu resumen', text: 'Aquí ves lo que vendiste, lo que ganaste y lo que te deben en el periodo elegido. Cambia el periodo arriba (hoy, semana, mes…).' },
-      { route: '/', target: 'quick', title: 'El botón +', text: 'Desde aquí registras todo: ventas, compras, gastos (del negocio, del viaje o personales), stock que ya tenías y más.' },
+      { route: '/', target: 'kpis', title: 'Tu resumen', text: 'Aquí ves lo que vendiste, lo que ganaste y lo que te deben en el periodo elegido. Cambia el periodo arriba (hoy, semana, mes…).', purpose: 'Saber cómo vas sin abrir nada más.', example: 'Si hoy vendiste $300.000 y te costaron $220.000, tu ganancia es $80.000.' },
+      { route: '/', target: 'quick', purpose: 'Registrar lo que pasa en tu negocio en segundos.', example: 'Vendiste un cargador: toca +, Venta, elige el cargador y el precio.', title: 'El botón +', text: 'Desde aquí registras todo: ventas, compras, gastos (del negocio, del viaje o personales), stock que ya tenías y más.' },
       { route: '/', target: 'nav-inventarios', title: 'Inventarios', text: 'Tus productos y existencias. Toca un producto para ver sus unidades, sus lotes por precio y lo que has pagado por él.' },
       { route: '/', target: 'nav-operaciones', title: 'Operaciones', text: 'Todas tus ventas, compras y gastos, con lo que te deben por cobrar.' },
       { route: '/', target: 'nav-mas', title: 'Más', text: 'Todo lo demás, ordenado por categorías: análisis e informes, clientes y cobros (me deben, preguntones), compras, tu plata (capital, deudas, gastos personales), notas y calendario, la ayuda y la configuración.' },
@@ -113,7 +117,65 @@ export const TOURS: Tour[] = [
     ],
     finish: { label: 'Lección: expectativas', to: '/aprende/expectativas' },
   },
+  {
+    id: 'negocio',
+    title: 'Tu negocio y la app a tu medida',
+    summary: 'Elige tu tipo de negocio y activa solo lo que necesitas: celulares, garantías, cotizaciones, preguntones…',
+    minutes: 1,
+    steps: [
+      { route: '/ajustes', title: 'La app se adapta a ti', text: 'Al empezar elegiste el tipo de negocio. La app muestra solo lo que le sirve a ese negocio y esconde lo demás para que no estorbe.', purpose: 'Una app más limpia y fácil.', example: 'Si vendes perros calientes no necesitas IMEI ni catálogo de celulares.' },
+      { route: '/ajustes', target: 'settings-business', title: 'Cambiar o agregar negocio', text: 'Aquí cambias el tipo de negocio, agregas otro (por ejemplo, tecnología y un puesto en la calle) y prendes o apagas funciones una por una, como Preguntones o Cotizaciones.', purpose: 'Que tú decidas qué ves.', example: 'Apagas «Preguntones» si no lo usas y desaparece de Inicio y del menú.' },
+      { title: 'No pierdes nada', text: 'Apagar una función solo la esconde: tus datos siguen guardados y vuelven cuando la prendes otra vez.' },
+    ],
+  },
+  {
+    id: 'cotizaciones',
+    title: 'Cotizaciones',
+    summary: 'Arma una cotización, envíala por WhatsApp y pásala a venta en un paso.',
+    minutes: 1,
+    steps: [
+      { route: '/cotizaciones', title: 'Cotizaciones', text: 'Una cotización es el precio que le ofreces a alguien antes de venderle. No mueve tu inventario ni tus cuentas hasta que se vende.', purpose: 'Ofrecer un precio claro y ordenado.', example: 'Ana pregunta por un iPhone y un cargador: le armas la cotización con el total.' },
+      { route: '/cotizaciones', target: 'quote-new', title: 'Nueva cotización', text: 'Toca aquí para armar una: eliges los productos, las cantidades, un descuento y hasta qué día vale el precio.' },
+      { route: '/cotizaciones/nueva', target: 'quote-products', title: 'Productos y precios', text: 'Agrega productos tuyos (con su precio sugerido) u otros conceptos escritos a mano, como un servicio.', purpose: 'Que el cliente vea cada precio.', example: '1 iPhone 13 a $2.000.000 + 2 cargadores a $35.000 = $2.070.000.' },
+      { route: '/cotizaciones/nueva', target: 'quote-valid', title: 'Descuento y validez', text: 'Pon un descuento si quieres y la fecha límite. Pasada esa fecha queda como vencida, y puedes renovarla.', purpose: 'Que el precio no valga para siempre.', example: 'Descuento de $70.000 y vale hasta el viernes.' },
+      { title: 'Enviar y vender', text: 'Desde la cotización toca «Enviar por WhatsApp» para abrir el chat con el mensaje listo, y «Convertir en venta» cuando el cliente compre: la app te llena la venta con lo cotizado.' },
+    ],
+    finish: { label: 'Hacer una cotización', to: '/cotizaciones/nueva' },
+  },
+  {
+    id: 'cierre-caja',
+    title: 'Cierre de caja y comprobantes',
+    summary: 'Cuadra la caja al final del día y envía comprobantes de venta por WhatsApp.',
+    minutes: 1,
+    steps: [
+      { route: '/cierre-caja', title: 'Cierre de caja', text: 'Al final del día mira lo que entró y salió, y compara el efectivo que debería haber con el que contaste.', purpose: 'Detectar a tiempo si falta o sobra plata.', example: 'Debería haber $75.000, contaste $70.000: faltan $5.000 y lo revisas hoy.' },
+      { route: '/cierre-caja', target: 'cash-count', title: 'Cuenta y compara', text: 'Escribe el efectivo que contaste. La app te dice si la caja cuadra, si sobra o si falta, y guarda el cierre en el historial.' },
+      { title: 'Comprobante de venta', text: 'En cualquier venta toca ⋮ → «Comprobante (imagen o PDF)». Sale con lo vendido, el total, lo pagado, lo que falta, y el IMEI y la garantía del equipo si los tiene.', purpose: 'Darle al cliente un soporte de su compra.', example: 'Se lo mandas por WhatsApp apenas pague.' },
+    ],
+  },
+  {
+    id: 'respaldo',
+    title: 'Respaldo y Excel',
+    summary: 'Guarda copia de tus datos y exporta todo a un archivo de Excel.',
+    minutes: 1,
+    steps: [
+      { route: '/respaldo', title: 'Tus datos son tuyos', text: 'La app guarda todo en tu teléfono, sin internet ni nubes. Por eso conviene hacer respaldos y guardarlos fuera del teléfono.', purpose: 'No perder nada si cambias o se daña el teléfono.', example: 'Haces el respaldo y lo envías a tu WhatsApp o a Drive.' },
+      { route: '/respaldo', target: 'excel-export', title: 'Exportar a Excel', text: 'Crea un solo archivo con hojas de inventario, existencias, compras, ventas, gastos, tablas de análisis por día, semana y mes, y gráficas.', purpose: 'Revisar o compartir tus números en el computador.', example: 'Se lo envías a tu contador o lo abres en Excel para hacer tus propias cuentas.' },
+      { title: 'Recordatorio', text: 'En Configuración eliges cada cuántos días la app te recuerda hacer el respaldo (0 = no recordar).' },
+    ],
+  },
 ];
+
+/** Recorrido completo: todos los temas seguidos, uno tras otro. */
+function fullTour(): Tour {
+  return {
+    id: 'all',
+    title: 'Recorrido completo',
+    summary: 'Todos los temas, uno tras otro.',
+    minutes: TOURS.reduce((a, t) => a + t.minutes, 0),
+    steps: TOURS.flatMap((t) => t.steps.map((st, i) => (i === 0 ? { ...st, title: `${t.title}: ${st.title}` } : st))),
+  };
+}
 
 /* ---------------- Estado ---------------- */
 
@@ -126,7 +188,7 @@ function emit() {
 }
 
 export function startTour(id: string): void {
-  const tour = TOURS.find((t) => t.id === id);
+  const tour = id === 'all' ? fullTour() : TOURS.find((t) => t.id === id);
   if (!tour) return;
   setPref('tourOffer', 'done');
   active = { tour, step: 0 };
@@ -224,9 +286,13 @@ export function TourHost() {
   const [missing, setMissing] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const [cardH, setCardH] = useState(180);
+  const [again, setAgain] = useState(0);
   const step = st ? st.tour.steps[st.step] : null;
-  const spoken = step ? `${step.title}. ${step.text}` : '';
+  const spoken = step ? `${step.title}. ${step.text}${step.purpose ? ` Para qué sirve: ${step.purpose}` : ''}${step.example ? ` Ejemplo: ${step.example}` : ''}${again % 2 ? ' ' : ''}` : '';
   useAutoSpeak(spoken, !!step);
+  useEffect(() => {
+    setAgain(0);
+  }, [step]);
 
   // Ir a la pantalla del paso
   useEffect(() => {
@@ -242,9 +308,15 @@ export function TourHost() {
     let tries = 0;
     let scrolled = false;
     let last = '';
+    let zoomed: HTMLElement | null = null;
     const tick = () => {
       const el = findTarget(step.target!);
       if (el) {
+        if (zoomed !== el) {
+          zoomed?.classList.remove('tour-zoom');
+          el.classList.add('tour-zoom');
+          zoomed = el;
+        }
         if (!scrolled) {
           el.scrollIntoView({ block: 'center', behavior: 'auto' });
           scrolled = true;
@@ -262,8 +334,11 @@ export function TourHost() {
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [step, route.path]);
+    return () => {
+      cancelAnimationFrame(raf);
+      zoomed?.classList.remove('tour-zoom');
+    };
+  }, [step, route.path, again]);
 
   useLayoutEffect(() => {
     if (cardRef.current) setCardH(cardRef.current.offsetHeight);
@@ -308,7 +383,7 @@ export function TourHost() {
       ) : (
         block({ top: 0, left: 0, width: vw, height: vh }, 'all')
       )}
-      <div ref={cardRef} key={`${tour.id}-${st.step}`} className="tour-card" style={{ top: cardTop, left: cardLeft, width: cardW }}>
+      <div ref={cardRef} key={`${tour.id}-${st.step}-${again}`} className="tour-card" style={{ top: cardTop, left: cardLeft, width: cardW }}>
         <p className="tiny muted">
           {tour.title} · paso {st.step + 1} de {tour.steps.length}
         </p>
@@ -316,6 +391,16 @@ export function TourHost() {
           {step.title}
         </h2>
         <p className="small">{step.text}</p>
+        {step.purpose ? (
+          <p className="small tour-extra">
+            <strong>Para qué sirve:</strong> {step.purpose}
+          </p>
+        ) : null}
+        {step.example ? (
+          <p className="small tour-extra tour-example">
+            <strong>Ejemplo:</strong> {step.example}
+          </p>
+        ) : null}
         <div className="tour-dots" aria-hidden="true">
           {tour.steps.map((_, i) => (
             <span key={i} className={i === st.step ? 'on' : ''} />
@@ -360,6 +445,14 @@ export function TourHost() {
               Siguiente
             </button>
           )}
+        </div>
+        <div className="tour-more">
+          <button type="button" className="link-btn" onClick={() => { stopSpeaking(); setAgain((n) => n + 1); }} data-testid="tour-repeat-step">
+            Repetir este paso
+          </button>
+          <button type="button" className="link-btn" onClick={() => go(0)} data-testid="tour-repeat-topic">
+            Repetir el tema
+          </button>
         </div>
         {last && tour.finish?.to.startsWith('tour:') ? (
           <button type="button" className="btn block" style={{ marginTop: 8 }} onClick={() => endTour(true)} data-testid="tour-finish-here">

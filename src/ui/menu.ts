@@ -3,6 +3,8 @@
  * y el botón + (Registrar). Agrupar evita una lista larga y revuelta.
  */
 
+import type { FeatureKey } from '../core';
+
 export interface MenuEntry {
   href: string;
   label: string;
@@ -10,6 +12,8 @@ export interface MenuEntry {
   sub?: string;
   /** Primer segmento de la ruta (para marcar la sección actual). */
   key: string;
+  /** v2.4: solo se muestra si esta función está activa (según tu tipo de negocio). */
+  feature?: FeatureKey;
 }
 
 export interface MenuGroup {
@@ -17,7 +21,7 @@ export interface MenuGroup {
   items: MenuEntry[];
 }
 
-const e = (href: string, label: string, icon: string, sub?: string): MenuEntry => ({ href, label, icon, sub, key: href.slice(1).split(/[/?]/)[0] });
+const e = (href: string, label: string, icon: string, sub?: string, feature?: FeatureKey): MenuEntry => ({ href, label, icon, sub, key: href.slice(1).split(/[/?]/)[0], feature });
 
 /** Menú Más (y la barra lateral, después de Inicio, Inventarios y Operaciones). */
 export const MORE_GROUPS: MenuGroup[] = [
@@ -33,18 +37,20 @@ export const MORE_GROUPS: MenuGroup[] = [
     title: 'Clientes y cobros',
     items: [
       e('/me-deben', 'Me deben', 'users', 'A quién le fiaste, cuánto te debe, abonos y cobro por WhatsApp'),
-      e('/preguntones', 'Preguntones', 'chat', 'Cuántos preguntan y no compran, por semana y por mes'),
+      e('/preguntones', 'Preguntones', 'chat', 'Cuántos preguntan y no compran, por semana y por mes', 'inquiries'),
+      e('/cotizaciones', 'Cotizaciones', 'tag', 'Armar, enviar por WhatsApp y pasar a venta', 'quotes'),
+      e('/cierre-caja', 'Cierre de caja', 'wallet', 'Lo que entró, lo que salió y cuánto debe haber en efectivo'),
       e('/compradores', 'Compradores', 'users'),
-      e('/garantias', 'Garantías', 'shield', 'Vigentes, por vencer y reclamos'),
+      e('/garantias', 'Garantías', 'shield', 'Vigentes, por vencer y reclamos', 'warranties'),
     ],
   },
   {
     title: 'Compras y mercancía',
     items: [
-      e('/precios', 'Precios de mercado', 'tag', 'Historial de precios y precio sugerido'),
-      e('/calculadora', '¿Cuánto pagar?', 'calc', 'Precio máximo de compra'),
+      e('/precios', 'Precios de mercado', 'tag', 'Historial de precios y precio sugerido', 'phones'),
+      e('/calculadora', '¿Cuánto pagar?', 'calc', 'Precio máximo de compra', 'phones'),
       e('/proveedores', 'Proveedores', 'truck'),
-      e('/catalogo', 'Catálogo de modelos', 'book'),
+      e('/catalogo', 'Catálogo de modelos', 'book', undefined, 'phones'),
       e('/vistas', 'Vistas consolidadas', 'layers', 'Consultar varios inventarios juntos'),
     ],
   },
@@ -87,6 +93,7 @@ export interface QuickAction {
   label: string;
   icon: string;
   hint: string;
+  feature?: FeatureKey;
 }
 
 export interface QuickGroup {
@@ -102,7 +109,7 @@ export const QUICK_GROUPS: QuickGroup[] = [
       { href: '/ventas/nueva', label: 'Venta', icon: 'tag', hint: 'Sale del inventario y suma ingresos' },
       { href: '/ventas/nueva?fiado=1', label: 'Fiar mercancía', icon: 'users', hint: 'Venta que te pagan después o por partes' },
       { href: '/me-deben', label: 'Abono de quien te debe', icon: 'money', hint: 'Fiados y abonos por persona' },
-      { href: '/preguntones', label: 'Preguntón (+1)', icon: 'chat', hint: 'Alguien preguntó y no compró' },
+      { href: '/preguntones', label: 'Preguntón (+1)', icon: 'chat', hint: 'Alguien preguntó y no compró', feature: 'inquiries' },
     ],
   },
   {
@@ -111,7 +118,7 @@ export const QUICK_GROUPS: QuickGroup[] = [
       { href: '/compras/nueva', label: 'Compra', icon: 'cart', hint: 'Entra al inventario con su costo' },
       { href: '/stock/nuevo', label: 'Stock que ya tenías', icon: 'box', hint: 'Mercancía que ya tenías (no es una compra nueva)' },
       { href: '/productos/nuevo', label: 'Producto nuevo', icon: 'plus', hint: 'Sin registrar existencias todavía' },
-      { href: '/calculadora', label: '¿Cuánto pagar?', icon: 'calc', hint: 'Precio máximo de compra según el mercado' },
+      { href: '/calculadora', label: '¿Cuánto pagar?', icon: 'calc', hint: 'Precio máximo de compra según el mercado', feature: 'phones' },
     ],
   },
   {

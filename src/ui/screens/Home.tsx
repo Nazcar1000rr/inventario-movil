@@ -26,6 +26,7 @@ import { db, getPref, setPref, useAction, useLive } from '../store';
 import { DAILY_TIPS, pickTip } from '../help/content';
 import { isTourDone, startTour, toursOff } from '../tour';
 import { InquiryCounter } from './Inquiries';
+import { useFeature } from '../features';
 import { DueReminders, useDueReminders } from './Calendar';
 import { Meter } from '../components/viz';
 import { ListenButton } from '../components/speaker';
@@ -272,6 +273,7 @@ export function HomeScreen() {
   const ids = scope.inventoryIds;
   const settings = useLive((d) => getSettings(d));
   const invCount = useLive((d) => d.inventories.count());
+  const showInquiries = useFeature('inquiries');
   const key = JSON.stringify([ids, period.range.current, period.range.previous]);
   const data = useLive(
     async (d) => {
@@ -308,7 +310,7 @@ export function HomeScreen() {
       <GettingStartedCard />
       {settings && settings.dailyTips !== false ? <DailyTipCard /> : null}
       <HomeReminders />
-      {invCount ? (
+      {invCount && showInquiries ? (
         <Card
           tour="home-inquiries"
           title={

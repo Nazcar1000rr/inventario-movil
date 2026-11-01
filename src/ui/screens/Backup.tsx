@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import {
+  exportExcel,
+  XLSX_MIME,
   AppError,
   analyzeImport,
   createBackup,
@@ -19,7 +21,7 @@ import {
 } from '../../core';
 import { Icon } from '../components/Icon';
 import { Badge, Card, confirmAction, Field, FormError, KV, Loading, Notice, Page, TextInput } from '../components/ui';
-import { isNative, pickTextFile, platformName, saveToDocuments, shareFile, downloadFile } from '../platform';
+import { isNative, pickTextFile, platformName, saveToDocuments, shareBinary, shareFile, downloadFile } from '../platform';
 import { db, practice, safetyName, toast, useAction, useLive } from '../store';
 
 const SUMMARY_TABLES: TableName[] = ['inventories', 'products', 'units', 'purchases', 'sales', 'payments', 'returns', 'expenses', 'suppliers', 'customers', 'warranties', 'photos', 'consolidatedViews'];
@@ -41,6 +43,7 @@ export function BackupScreen() {
       {practice ? <Notice kind="warn" title="Estás en modo práctica">Los respaldos que hagas aquí contienen solo los datos de ejemplo. Sal del modo práctica para respaldar tus datos reales.</Notice> : null}
       <p className="small muted">Último respaldo: {lastBackup ? formatDateTime(lastBackup) : 'nunca'}</p>
       <ExportCard />
+      <ExcelCard />
       <ImportCard />
       {safety ? <UndoCard createdAt={safety.createdAt} /> : null}
     </Page>
@@ -130,6 +133,38 @@ function ExportCard() {
           </div>
         )}
         <FormError error={act.error ?? shareAct.error} />
+      </div>
+    </Card>
+  );
+}
+
+function ExcelCard() {
+  const act = useAction();
+  const [done, setDone] = useState<string | null>(null);
+  const run = async () => {
+    setDone(null);
+    const out = await act.run(async () => {
+      const book = await exportExcel(db);
+      const outcome = await shareBinary(book.name, book.bytes, XLSX_MIME, 'Guardar o enviar Excel');
+      return { outcome, book };
+    });
+    if (out && out.outcome !== 'cancelled') {
+      const c = out.book.counts;
+      setDone(`${out.book.name} · ${formatInt(c.Ventas)} línea(s) de venta, ${formatInt(c.Compras)} de compra, ${formatInt(c.Inventario)} producto(s)`);
+      toast(out.outcome === 'downloaded' ? 'Excel descargado' : 'Excel enviado al menú del sistema');
+    }
+  };
+  return (
+    <Card title="Exportar a Excel" tour="excel-export">
+      <div className="stack">
+        <p className="small">
+          Un solo archivo de Excel con hojas de <strong>inventario, existencias, compras, ventas, gastos</strong>, tablas de análisis por día, semana y mes, y gráficas. Es para revisar o compartir: no reemplaza el respaldo completo.
+        </p>
+        <button className="btn block" disabled={act.busy} onClick={() => void run()} data-testid="export-excel">
+          <Icon name="download" /> {act.busy ? 'Preparando Excel…' : 'Exportar a Excel'}
+        </button>
+        {done ? <Notice kind="ok" title="Excel listo"><span className="wrap-anywhere">{done}</span></Notice> : null}
+        <FormError error={act.error} />
       </div>
     </Card>
   );

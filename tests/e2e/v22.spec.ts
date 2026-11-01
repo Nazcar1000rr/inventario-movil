@@ -133,5 +133,5 @@ test('v2.2 · paquetes de sonidos, tono por sonido y opción de silencio del iPh
   await expect(page.getByTestId('ignore-silent')).toBeChecked();
   expect(await page.evaluate(() => (navigator as unknown as { audioSession: { type: string } }).audioSession.type)).toBe('playback');
   await page.getByTestId('ignore-silent').uncheck();
-  expect(await page.evaluate(() => (navigator as unknown as { audioSession: { type: string } }).audioSession.type)).toBe('auto');
+  expect(await page.evaluate(() => (navigator as unknown as { audioSession: { type: string } }).audioSession.type)).toBe('ambient');
 });

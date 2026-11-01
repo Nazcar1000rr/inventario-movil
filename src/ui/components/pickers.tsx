@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AppError,
+  capacityChoices,
   createCustomer,
   createProduct,
   createSupplier,
@@ -10,6 +11,7 @@ import {
   formatCOP,
   KIND_LABEL,
   normalizeText,
+  PHONE_CAPACITIES,
   summarizeUnits,
   TRACKING_LABEL,
   unitCost,
@@ -22,6 +24,7 @@ import {
   type Unit,
 } from '../../core';
 import { db, useAction, useLive } from '../store';
+import { useFeature } from '../features';
 import { maskImei } from './common';
 import { Icon, KIND_ICON } from './Icon';
 import { Badge, Chips, Empty, Field, FormError, IntInput, Loading, MoneyInput, Notice, Segmented, Sheet, TextInput } from './ui';
@@ -167,11 +170,13 @@ export function QuickProductForm({
   submitLabel?: string;
 }) {
   const catalog = useLive((d) => d.catalogModels.toArray());
+  const phonesOn = useFeature('phones');
   const [kind, setKind] = useState<ProductKind>('phone');
   const [brand, setBrand] = useState('Apple');
   const [catalogId, setCatalogId] = useState('');
   const [model, setModel] = useState('');
   const [capacity, setCapacity] = useState('');
+  const [allCaps, setAllCaps] = useState(false);
   const [variant, setVariant] = useState('');
   const [name, setName] = useState(initialName);
   const [reference, setReference] = useState('');
@@ -200,6 +205,12 @@ export function QuickProductForm({
     setCapacity('');
     setBrand(k === 'phone' || k === 'audio' ? 'Apple' : '');
   };
+
+  // v2.4: si tu negocio no vende celulares, el producto nuevo empieza como «Producto» y no ofrece teléfonos ni audífonos
+  useEffect(() => {
+    if (!phonesOn && (kind === 'phone' || kind === 'audio')) changeKind('other');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phonesOn]);
 
   const submit = async (allowDuplicate = false) => {
     setDup(null);
@@ -250,12 +261,19 @@ export function QuickProductForm({
           label="Tipo de producto"
           value={kind}
           onChange={changeKind}
-          options={[
-            ['phone', 'Teléfono'],
-            ['audio', 'Audífonos'],
-            ['accessory', 'Accesorio'],
-            ['other', 'Otro'],
-          ]}
+          options={
+            phonesOn
+              ? [
+                  ['phone', 'Teléfono'],
+                  ['audio', 'Audífonos'],
+                  ['accessory', 'Accesorio'],
+                  ['other', 'Otro'],
+                ]
+              : [
+                  ['other', 'Producto'],
+                  ['accessory', 'Accesorio'],
+                ]
+          }
         />
       </Field>
       {kind === 'phone' || kind === 'audio' ? (
@@ -295,9 +313,14 @@ export function QuickProductForm({
               ))}
             </select>
           </Field>
-          {selected && selected.storageOptions.length ? (
-            <Field label="Capacidad">
-              <Chips label="Capacidad" value={capacity} onChange={setCapacity} options={selected.storageOptions.map((s) => [s, s] as [string, string])} />
+          {selected && (selected.storageOptions.length || selected.category === 'phone') ? (
+            <Field label="Capacidad" hint={selected.category === 'phone' && !allCaps ? undefined : 'De 64 GB a 1 TB.'}>
+              <Chips wrap label="Capacidad" value={capacity} onChange={setCapacity} options={capacityChoices(selected.storageOptions, allCaps && selected.category === 'phone').map((s) => [s, s] as [string, string])} />
+              {selected.category === 'phone' ? (
+                <button type="button" className="btn small" data-testid="all-capacities" aria-pressed={allCaps} onClick={() => setAllCaps(!allCaps)}>
+                  {allCaps ? 'Solo las del modelo' : 'Otra capacidad (64 GB a 1 TB)'}
+                </button>
+              ) : null}
             </Field>
           ) : null}
         </>
@@ -313,7 +336,8 @@ export function QuickProductForm({
             />
           </Field>
           {kind === 'phone' ? (
-            <Field label="Capacidad (opcional)" htmlFor="qp-cap">
+            <Field label="Capacidad (opcional)" htmlFor="qp-cap" hint="De 64 GB a 1 TB; también puedes escribirla.">
+              <Chips wrap label="Capacidades" value={capacity} onChange={setCapacity} options={PHONE_CAPACITIES.map((s) => [s, s] as [string, string])} />
               <TextInput id="qp-cap" placeholder="Ej.: 128 GB" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
             </Field>
           ) : null}

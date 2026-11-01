@@ -135,11 +135,12 @@ describe('Etapa 4: funciones profesionales', () => {
     expect((await db.warrantyClaims.get(c.id))?.resolvedAt).not.toBeNull();
   });
 
-  it('catálogo base: iPhone X a la generación actual sin duplicados y con variantes reales', () => {
+  it('catálogo base: iPhone 7 a la generación actual sin duplicados y con variantes reales', () => {
     const cat = builtinCatalog(new Date().toISOString());
     const phones = cat.filter((c) => c.category === 'phone').map((c) => c.model);
     expect(new Set(phones).size).toBe(phones.length);
-    expect(phones[0]).toBe('iPhone X');
+    expect(phones[0]).toBe('iPhone 7');
+    expect(phones).toContain('iPhone X');
     for (const m of ['iPhone 12 mini', 'iPhone 14 Plus', 'iPhone 16e', 'iPhone Air', 'iPhone 17 Pro Max', 'iPhone 17e', 'iPhone 18 Pro Max']) expect(phones).toContain(m);
     // Variantes que nunca existieron
     for (const m of ['iPhone 14 mini', 'iPhone 13 Plus', 'iPhone X Pro', 'iPhone 18']) expect(phones).not.toContain(m);

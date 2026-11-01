@@ -1214,3 +1214,116 @@ export async function getBusinessAnalysis(db: AppDB, inventoryIds: ID[] | null, 
   return analyzeBusiness(data, inventoryIds, now, aging, sold);
 }
 
+
+/* ======================= Tablas por día, semana y mes (v2.4) ======================= */
+
+export type TableGranularity = 'day' | 'week' | 'month';
+
+export const GRANULARITY_LABEL: Record<TableGranularity, string> = { day: 'Por día', week: 'Por semana', month: 'Por mes' };
+
+const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+/** Periodos (hora local) de los últimos `n` días, semanas o meses; el último es el actual (incompleto). */
+export function periodsFor(kind: TableGranularity, n: number, now: Date): { period: Period; label: string; short: string; partial: boolean }[] {
+  const out: { period: Period; label: string; short: string; partial: boolean }[] = [];
+  if (kind === 'day') {
+    const today = dayStart(now);
+    for (let i = n - 1; i >= 0; i--) {
+      const s = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      const e = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 1);
+      const wd = WEEKDAYS[(s.getDay() + 6) % 7].slice(0, 3).toLowerCase();
+      out.push({ period: { from: s.toISOString(), to: e.toISOString() }, label: `${WEEKDAYS[(s.getDay() + 6) % 7]} ${s.getDate()} ${MONTH_SHORT[s.getMonth()]}`, short: `${wd} ${s.getDate()}`, partial: i === 0 });
+    }
+    return out;
+  }
+  const cur = periodStart(kind, now);
+  for (let i = n - 1; i >= 0; i--) {
+    const s = shiftPeriod(kind, cur, -i);
+    const nm = periodName(kind, s);
+    out.push({ period: periodOf(kind, s), label: nm.label, short: nm.short, partial: i === 0 });
+  }
+  return out;
+}
+
+export interface PeriodTable {
+  kind: TableGranularity;
+  rows: PeriodMetrics[];
+  total: {
+    revenue: Money;
+    cogs: Money;
+    grossProfit: Money;
+    expenses: Money;
+    netProfit: Money;
+    sales: number;
+    units: number;
+    purchases: Money;
+    collected: Money;
+  };
+  /** El periodo con más ventas (en pesos); null si no hubo ventas. */
+  best: PeriodMetrics | null;
+}
+
+/** Tabla de ventas, ganancias y caja por día, semana o mes. Cada fila sale del mismo cálculo financiero del resto de la app. */
+export function periodTable(data: AnalysisData, kind: TableGranularity, n: number, ids: ID[] | null, now: Date): PeriodTable {
+  const rows = periodsFor(kind, n, now).map((p) => periodMetrics(data, p.period, ids, p.label, p.short, p.partial));
+  const total = {
+    revenue: sum(rows.map((r) => r.revenue)),
+    cogs: sum(rows.map((r) => r.cogs)),
+    grossProfit: sum(rows.map((r) => r.grossProfit)),
+    expenses: sum(rows.map((r) => r.expenses)),
+    netProfit: sum(rows.map((r) => r.netProfit)),
+    sales: sum(rows.map((r) => r.sales)),
+    units: sum(rows.map((r) => r.units)),
+    purchases: sum(rows.map((r) => r.purchases)),
+    collected: sum(rows.map((r) => r.collected)),
+  };
+  let best: PeriodMetrics | null = null;
+  for (const r of rows) if (r.revenue > 0 && (!best || r.revenue > best.revenue)) best = r;
+  return { kind, rows, total, best };
+}
+
+export interface MovementRow {
+  productId: ID;
+  units: number;
+  /** Ventas netas (después de descuentos y devoluciones). */
+  revenue: Money;
+  /** Ganancia bruta de ese producto (ventas netas − costo conocido). */
+  profit: Money;
+  /** Cuántas ventas lo incluyeron. */
+  sales: number;
+  /** Parte de las unidades vendidas del periodo (0–1). */
+  share: number;
+}
+
+/**
+ * Productos que más se mueven en un periodo (por unidades vendidas), con lo que dejaron.
+ * Las devoluciones se restan; las ventas anuladas no cuentan.
+ */
+export function productMovement(data: AnalysisData, period: Period, ids: ID[] | null): MovementRow[] {
+  const inScope = scopeFor(ids);
+  const active = new Map(data.fin.sales.filter((s) => s.status === 'active' && inScope(s.inventoryId) && s.date >= period.from && s.date < period.to).map((s) => [s.id, s]));
+  const by = new Map<ID, { units: number; revenue: Money; profit: Money; sales: Set<ID> }>();
+  for (const l of data.fin.saleLines) {
+    if (!active.has(l.saleId)) continue;
+    const units = l.quantity - l.returnedQty;
+    const revenue = l.netAmount - l.returnedAmount;
+    const profit = revenue - (l.cogs - l.returnedCogs);
+    const g = by.get(l.productId) ?? { units: 0, revenue: 0, profit: 0, sales: new Set<ID>() };
+    g.units += units;
+    g.revenue += revenue;
+    g.profit += profit;
+    g.sales.add(l.saleId);
+    by.set(l.productId, g);
+  }
+  const totalUnits = sum([...by.values()].map((g) => Math.max(0, g.units)));
+  return [...by.entries()]
+    .map(([productId, g]) => ({ productId, units: g.units, revenue: g.revenue, profit: g.profit, sales: g.sales.size, share: totalUnits > 0 ? Math.max(0, g.units) / totalUnits : 0 }))
+    .filter((r) => r.units > 0 || r.revenue > 0)
+    .sort((a, b) => b.units - a.units || b.revenue - a.revenue);
+}
+
+/** Periodo de "hoy", "esta semana" o "este mes" (hora local) para la tabla de productos. */
+export function currentPeriod(kind: TableGranularity, now: Date): { period: Period; label: string } {
+  const p = periodsFor(kind, 1, now)[0];
+  return { period: p.period, label: kind === 'day' ? 'Hoy' : kind === 'week' ? 'Esta semana' : 'Este mes' };
+}
