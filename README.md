@@ -26,8 +26,8 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 | Interfaz | ✅ 37 pruebas de extremo a extremo en Chromium, todas aprobadas |
 | Conversión automática de los datos de la v1 | ✅ Probada con una base real de la v1 (en la capa de datos y en el navegador) y con respaldos de la v1 |
 | Conversión automática de los datos de la v2 (lotes) | ✅ Probada con una base real de la v2 y con respaldos de la v2 (en la capa de datos, con el mismo código Dexie de la app) |
-| PWA publicada en HTTPS | ⏳ Versión 2.4.0 lista para publicar: pendiente de subir al repositorio y comprobar GitHub Pages (la última publicada y verificada es la 2.3.0, versión cae583406f28) |
-| APK de Android | ⏳ La 2.4.0 se compila y firma en GitHub Actions al subir el código (pendiente). La última publicada y verificada es la 2.3.0 (compilación 10) |
+| PWA publicada en HTTPS | ✅ Versión 2.4.0: el flujo de GitHub Pages terminó bien (ejecución 19). La dirección en vivo no se pudo abrir desde donde se publicó, así que **no** se comprobó a mano que sirva la compilación 571b20859897; ábrela y mira Ayuda → versión 2.4.0 |
+| APK de Android | ✅ Versión 2.4.0 (compilación 11) compilada y firmada en GitHub Actions y publicada en *Releases*. Comprobado: firmado con la misma clave de siempre (SHA-256 16554A00…433C972, se puede instalar encima) y trae la compilación 571b20859897. Los permisos no se volvieron a revisar (no cambiaron los plugins) |
 | Clave de firma del APK | Entregada **por separado** (no está en el código) |
 | Pruebas en iPhone o Android físicos, o en Safari | ⛔ **No realizadas** (no hay dispositivos ni Safari/WebKit en este entorno): tampoco las notificaciones reales, abrir WhatsApp ni el calendario del iPhone. Ver la lista de verificación en docs/PRUEBAS.md |
 
