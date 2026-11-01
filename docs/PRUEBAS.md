@@ -1,13 +1,26 @@
 # Pruebas: lo ejecutado y lo pendiente
 
-Fecha de ejecución: 11 de octubre de 2026 (versión 2.3.0).
+Fecha de ejecución: 31 de octubre de 2026 (versión 2.4.0; las pruebas de la 2.3 siguen más abajo).
 
 Entorno:
 - Linux con Node 22.22.
 - Vitest 5.0.3 + fake-indexeddb 6.2.5: implementación de IndexedDB conforme al estándar, sobre la que corre el mismo código Dexie de la app.
 - Playwright 1.56 con Chromium 141 (compilación 1194), contra la **compilación de producción** (`npm run build` + `vite preview`).
 
-**Resultado: 119/119 pruebas de lógica y 36/36 pruebas de extremo a extremo aprobadas.** `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+**Resultado (2.4.0): 121/121 pruebas de lógica y 37/37 pruebas de extremo a extremo aprobadas** (en esta ejecución se usó el Chromium 1243 que trae el entorno, no el 1194; la suite completa dio 36 aprobadas y 1 caída que se arregló y se volvió a correr aprobada, ver abajo). `tsc` (TypeScript 7.0.2, modo estricto) no reporta errores.
+
+## Versión 2.4: qué se probó
+
+| Función | Qué se comprobó | Resultado |
+|---|---|---|
+| Operaciones por categorías | E2E (Chromium): ventas por estado de cobro (por cobrar $ 1.100.000 y pagadas $ 2.000.000, sin grupo de anuladas), plegar y desplegar un grupo, la elección se recuerda al cambiar de pestaña, gastos por categoría (Publicidad, Empaques), compras por proveedor («Sin proveedor»), volver a «Por fecha» quita los grupos, sin desborde horizontal; capturas revisadas a la vista | ✅ |
+| .ics a 75 octetos | Unit: título y descripción con tildes, ñ, ✓ y emojis; ninguna línea pasa de 75 bytes y al desdoblar queda el texto igual | ✅ |
+
+**Error real encontrado y corregido (2.4):** el archivo .ics doblaba las líneas por caracteres y no por bytes; con tildes o emojis las líneas pasaban de 75 octetos.
+
+**Prueba corregida (2.4):** `v23.spec.ts` (calendario) fallaba el último día del mes porque «mañana» caía en el mes siguiente y la cuadrícula muestra el mes actual; ahora avanza de mes cuando hace falta. No era un fallo de la app.
+
+**No probado aquí (2.4):** igual que la 2.3 (teléfono físico, Safari), y la publicación: no se pudo subir el código a GitHub desde esta sesión (el token no sirvió), así que CI, Pages y la firma del APK de la 2.4.0 **no** están verificados.
 
 ## Versión 2.3: qué se probó
 
@@ -174,9 +187,9 @@ Las 24 pruebas obligatorias de la v1 (inventarios y modos, compras, ventas, stoc
 
 ```bash
 npm ci
-npm test                     # 119 pruebas de lógica (~12 s)
+npm test                     # 121 pruebas de lógica (~12 s)
 npm run build
-npx playwright test          # 36 pruebas E2E (~9 min). Requiere el navegador Chromium de Playwright
+npx playwright test          # 37 pruebas E2E (~9 min). Requiere el navegador Chromium de Playwright
 ```
 
 Para regenerar el manual en PDF (después de cambiar la ayuda): `npm run build`, `npm run preview` en otra terminal y `node scripts/make-manual-pdf.mjs`; luego `npm run build` otra vez.

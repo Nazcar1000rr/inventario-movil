@@ -220,16 +220,30 @@ function icsUtc(d: Date): string {
   return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 }
 
-/** Las líneas largas se doblan a 75 caracteres (regla del formato). */
+/**
+ * Las líneas largas se doblan a 75 OCTETOS (bytes UTF-8, regla del formato), sin partir un carácter:
+ * una tilde pesa 2 bytes y un emoji 4. Cada línea de continuación empieza con un espacio.
+ */
 function fold(line: string): string {
+  const enc = new TextEncoder();
+  if (enc.encode(line).length <= 75) return line;
   const out: string[] = [];
-  let rest = line;
-  while (rest.length > 74) {
-    out.push(rest.slice(0, 74));
-    rest = ` ${rest.slice(74)}`;
+  let cur = '';
+  let bytes = 0;
+  let limit = 75;
+  for (const ch of line) {
+    const b = enc.encode(ch).length;
+    if (bytes + b > limit) {
+      out.push(cur);
+      cur = '';
+      bytes = 0;
+      limit = 74;
+    }
+    cur += ch;
+    bytes += b;
   }
-  out.push(rest);
-  return out.join('\r\n');
+  out.push(cur);
+  return out.map((l, k) => (k ? ` ${l}` : l)).join('\r\n');
 }
 
 /**

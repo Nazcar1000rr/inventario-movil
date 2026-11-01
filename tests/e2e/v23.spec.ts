@@ -169,6 +169,8 @@ test('v2.3 · calendario: nota con avisos elegidos, aviso dentro de la app y arc
   await docShot(page, 'v23-nota', false);
   await sheet.getByTestId('save-note').click();
   await expect(sheet).toHaveCount(0);
+  // Último día del mes: «mañana» está en el mes siguiente, que la cuadrícula solo muestra al avanzar
+  if ((await page.locator(`[data-day="${tomorrow}"]`).count()) === 0) await page.getByRole('button', { name: 'Mes siguiente' }).click();
   await expect(page.locator(`[data-day="${tomorrow}"] .cal-dot`)).toBeVisible();
   await expect(page.getByTestId('due-reminders')).toContainText('Pagar el arriendo');
   await expect(page.getByTestId('due-reminders')).toContainText('Mañana');
@@ -182,6 +184,7 @@ test('v2.3 · calendario: nota con avisos elegidos, aviso dentro de la app y arc
   await expect(page.getByTestId('due-reminders')).toHaveCount(0);
   // Pasar al calendario del teléfono (.ics)
   await page.goto('/#/calendario');
+  if ((await page.locator(`[data-day="${tomorrow}"]`).count()) === 0) await page.getByRole('button', { name: 'Mes siguiente' }).click();
   await page.locator(`[data-day="${tomorrow}"]`).click();
   await page.getByTestId('note-list').first().getByText('Pagar el arriendo').click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('ics-one').click()]);

@@ -21,7 +21,7 @@ Ambas se publican solas con GitHub Actions cada vez que se sube un cambio al rep
 
 Necesita iOS 15.4 o superior; se recomienda iOS 17 o superior.
 
-### Actualizar (por ejemplo, a la 2.3)
+### Actualizar (por ejemplo, a la 2.4)
 
 1. **Antes:** en la app, Más → Respaldo → Preparar respaldo → guárdalo fuera del teléfono.
 2. Abre la app con internet. Aparece "Hay una versión nueva de la app": toca **Actualizar ahora**.
@@ -56,7 +56,7 @@ Si algún día quieres publicarla en otro lugar: en el repositorio, **Settings �
 
 Necesita Android 7.0 o superior, con *Android System WebView* o Chrome actualizado (versión 90 o superior).
 
-### Actualizar (por ejemplo, a la 2.3)
+### Actualizar (por ejemplo, a la 2.4)
 
 1. **Antes:** Más → Respaldo → Preparar respaldo → guárdalo fuera del teléfono (o "Guardar en Documentos").
 2. Instala el APK nuevo **encima** del anterior, **sin desinstalar**. Los datos se conservan porque la firma es la misma.

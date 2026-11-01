@@ -204,6 +204,41 @@ export function Paged<T>({ items, render, pageSize = 40, empty }: { items: T[]; 
   );
 }
 
+/** Grupo plegable de filas (v2.4): título, cantidad y total; se abre y se cierra con un toque. */
+export interface ItemGroup<T> {
+  key: string;
+  title: string;
+  /** Texto ya formateado del total del grupo (p. ej. "$ 120.000"). */
+  totalText?: string;
+  items: T[];
+}
+
+export function GroupedList<T>({ groups, render, empty, pageSize = 25 }: { groups: ItemGroup<T>[]; render: (x: T) => ReactNode; empty?: ReactNode; pageSize?: number }) {
+  const [closed, setClosed] = useState<Record<string, boolean>>({});
+  if (!groups.length) return <>{empty}</>;
+  return (
+    <div className="stack-sm" data-testid="grouped-list">
+      {groups.map((g) => {
+        const isClosed = !!closed[g.key];
+        return (
+          <section key={g.key} className="card flush ops-group">
+            <button type="button" className="ops-group-head" aria-expanded={!isClosed} onClick={() => setClosed({ ...closed, [g.key]: !isClosed })}>
+              <span className="ops-group-title">{g.title}</span>
+              <span className="ops-group-meta">
+                {g.items.length} · {g.totalText ?? ''}
+              </span>
+              <span aria-hidden="true" className="ops-group-caret">
+                {isClosed ? '▸' : '▾'}
+              </span>
+            </button>
+            {isClosed ? null : <Paged items={g.items} render={render} pageSize={pageSize} />}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ================= Formularios ================= */
 
 export function Field({ label, hint, error, children, htmlFor, tour }: { label: ReactNode; hint?: ReactNode; error?: string | null; children: ReactNode; htmlFor?: string; tour?: string }) {

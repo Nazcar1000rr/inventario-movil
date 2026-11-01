@@ -269,3 +269,8 @@ Cada unidad guarda una lista de cambios: pieza (batería, pantalla, tapa, cámar
 - **Recorridos:** «Omitir» marca el recorrido como `skipped` (no se vuelve a ofrecer); «Repetir primeros pasos» borra el avance de los recorridos, vuelve a mostrar la lista de primeros pasos y empieza «Conoce la app»; `tours:off` quita la invitación de Inicio.
 - **Voz:** mientras `speaking` es verdadero se muestra la barra «Leyendo» con «Callar» (`stopSpeaking`) y «Silenciar» (`setMuted(true)`).
 - **Sonidos al volver a la app:** antes solo se reanudaba el contexto de audio si estaba `suspended`; en iPhone queda `interrupted` y a veces no vuelve aunque se le pida, por eso al regresar no sonaba nada (la voz sí, porque usa otro motor). Ahora el audio se pausa al ocultarse la app y, en el primer toque al volver (`touchend`/`pointerup`/`click`/`keydown`), se crea un contexto nuevo dentro de ese toque; si un contexto no arranca en 400 ms, el siguiente toque lo reemplaza. Un sonido pedido con el audio en pausa suena apenas arranca.
+
+## 20. Cambios de la v2.4
+
+- **Operaciones por categorías:** `GroupedList` (`src/ui/components/ui.tsx`) dibuja grupos plegables con título, cantidad y total; `groupBy` (`src/ui/screens/Operations.tsx`) arma los grupos. Ventas → estado de cobro (por cobrar, pagadas, anuladas; el total de «por cobrar» es lo pendiente), compras → proveedor, gastos → categoría. La elección («Por fecha» o agrupado) se recuerda en `pref:opsView` (almacenamiento local de visualización, no entra en el respaldo). No hay cambios de esquema ni de datos.
+- **.ics:** `fold()` dobla las líneas a 75 octetos UTF-8 sin partir caracteres (antes contaba caracteres, y las tildes y emojis pasaban del límite).

@@ -1112,7 +1112,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
   purchase: { title: 'Compra', intro: 'Detalle de la compra. Si te equivocaste en una cantidad o un precio, toca «Corregir» en el producto. También puedes agregarle gastos (transporte del viaje) y cambiar el precio al que vendes.', articles: ['correcciones', 'compras', 'gasto-compra', 'precio-venta'] },
   'sale-form': { title: 'Nueva venta', intro: 'Elige lo que vendes y el precio. La app te muestra el costo, el mínimo y el sugerido (y el de cada lote).', articles: ['ventas', 'precios', 'lotes', 'comisiones'] },
   sale: { title: 'Venta', intro: 'Detalle, pagos, devoluciones y garantías de la venta.', articles: ['pagos', 'devoluciones', 'garantias'] },
-  operations: { title: 'Operaciones', intro: 'Tus ventas, compras y gastos. Filtra las ventas por cobrar.', articles: ['ventas', 'compras', 'gastos'] },
+  operations: { title: 'Operaciones', intro: 'Tus ventas, compras y gastos. Filtra las ventas por cobrar o cambia «Ver» para agruparlas por estado de cobro, proveedor o categoría.', articles: ['ventas', 'compras', 'gastos'] },
   'expense-form': { title: 'Nuevo gasto', intro: 'Elige de quién es el gasto: del negocio (resta de la ganancia), de una compra o viaje (se suma al costo) o personal (plata que sacas para ti).', articles: ['gastos', 'gasto-compra', 'gastos-personales'] },
   capital: { title: 'Capital', intro: 'Cuánto vale tu negocio, cuánto has puesto y cuánto ha crecido. Toca ⓘ para ver cada cálculo.', articles: ['capital', 'aportes', 'metricas', 'metas'] },
   debts: { title: 'Deudas y préstamos', intro: 'Lo que debe el negocio y lo que tú le debes. Registra abonos e intereses.', articles: ['deudas', 'aportes'] },
@@ -1148,6 +1148,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.4.0',
+    title: 'Novedades de la versión 2.4',
+    items: [
+      { title: 'Operaciones por categorías', text: 'En Operaciones elige «Ver»: por fecha o agrupado. Las ventas se agrupan por estado de cobro (por cobrar, pagadas, anuladas), las compras por proveedor y los gastos por categoría, cada grupo con su total. Toca el título de un grupo para plegarlo.', to: '/operaciones?tab=ventas' },
+      { title: 'Calendario con tildes y emojis', text: 'Al pasar tus notas al calendario del teléfono (.ics), los títulos largos con tildes o emojis ya no se cortan mal.' },
+    ],
+  },
   {
     version: '2.3.0',
     title: 'Novedades de la versión 2.3',

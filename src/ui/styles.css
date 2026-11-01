@@ -2771,3 +2771,39 @@ a.quick-tile {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* Grupos plegables de Operaciones (v2.4) */
+.ops-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ops-group-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.ops-group-meta {
+  font-size: 0.85rem;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.ops-group-caret {
+  color: var(--text-2);
+  width: 1em;
+  text-align: center;
+}
+.ops-group:not(:has(ul)) .ops-group-head {
+  border-bottom: 0;
+}

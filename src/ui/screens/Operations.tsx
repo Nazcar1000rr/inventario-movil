@@ -21,13 +21,29 @@ import {
 } from '../../core';
 import { InventorySelect, PaymentBadge, ScopeSelect, useDefaultInventory, useScope } from '../components/common';
 import { Icon } from '../components/Icon';
-import { Badge, Card, Chips, confirmAction, DateTimeInput, Empty, Field, FormError, KV, Loading, MoneyInput, Notice, Page, Paged, Segmented, TextInput } from '../components/ui';
+import { Badge, Card, Chips, confirmAction, DateTimeInput, Empty, Field, FormError, GroupedList, KV, Loading, MoneyInput, Notice, Page, Paged, Segmented, TextInput, type ItemGroup } from '../components/ui';
 import { navigate, useRoute } from '../router';
-import { db, useAction, useLive } from '../store';
+import { db, useAction, useLive, usePref } from '../store';
 import { CostSplitView, purchasesOfDayView } from '../components/lots';
 import { PersonalSpendingForm } from './Personal';
 
 type Tab = 'ventas' | 'compras' | 'gastos';
+type View = 'fecha' | 'categoria';
+
+/** Agrupa filas (ya ordenadas por fecha) en grupos con total; `order` fija el orden de los grupos conocidos. */
+function groupBy<T>(rows: T[], key: (r: T) => string, total: (r: T) => number, order?: string[]): ItemGroup<T>[] {
+  const m = new Map<string, { items: T[]; total: number }>();
+  for (const r of rows) {
+    const k = key(r);
+    const g = m.get(k) ?? { items: [], total: 0 };
+    g.items.push(r);
+    g.total += total(r);
+    m.set(k, g);
+  }
+  const rank = (k: string) => (order && order.includes(k) ? order.indexOf(k) : order ? order.length : 0);
+  const keys = [...m.keys()].sort((a, b) => rank(a) - rank(b));
+  return keys.map((k) => ({ key: k, title: k, totalText: formatCOP(m.get(k)!.total), items: m.get(k)!.items }));
+}
 
 export function OperationsScreen({ tab }: { tab: Tab }) {
   const route = useRoute();
@@ -39,6 +55,8 @@ export function OperationsScreen({ tab }: { tab: Tab }) {
   }, [invFromQuery, ready, setScope]);
   const ids = scope.inventoryIds;
   const setTab = (t: Tab) => navigate(`/operaciones?tab=${t}`, { replace: true });
+  const [pref, setPref] = usePref('opsView', 'fecha');
+  const view: View = pref === 'categoria' ? 'categoria' : 'fecha';
   return (
     <Page help="operations"
       title="Operaciones"
@@ -50,12 +68,13 @@ export function OperationsScreen({ tab }: { tab: Tab }) {
     >
       <Segmented label="Tipo de operación" value={tab} onChange={setTab} options={[['ventas', 'Ventas'], ['compras', 'Compras'], ['gastos', 'Gastos']]} />
       <ScopeSelect {...scope} />
-      {tab === 'ventas' ? <SalesList ids={ids} initialFilter={route.query.get('f') === 'pendientes' ? 'pending' : 'all'} /> : tab === 'compras' ? <PurchasesList ids={ids} /> : <ExpensesList ids={ids} />}
+      <Chips label="Ver" value={view} onChange={setPref} options={[['fecha', 'Por fecha'], ['categoria', tab === 'ventas' ? 'Por estado de cobro' : tab === 'compras' ? 'Por proveedor' : 'Por categoría']]} />
+      {tab === 'ventas' ? <SalesList ids={ids} view={view} initialFilter={route.query.get('f') === 'pendientes' ? 'pending' : 'all'} /> : tab === 'compras' ? <PurchasesList ids={ids} view={view} /> : <ExpensesList ids={ids} view={view} />}
     </Page>
   );
 }
 
-function SalesList({ ids, initialFilter }: { ids: ID[] | null; initialFilter: 'all' | 'pending' }) {
+function SalesList({ ids, initialFilter, view }: { ids: ID[] | null; initialFilter: 'all' | 'pending'; view: View }) {
   const [filter, setFilter] = useState<'all' | 'pending' | 'voided'>(initialFilter);
   const [q, setQ] = useState('');
   const data = useLive(
@@ -87,44 +106,58 @@ function SalesList({ ids, initialFilter }: { ids: ID[] | null; initialFilter: 'a
     );
   }, [data, filter, q]);
   const pendingTotal = (data ?? []).reduce((a, r) => a + r.bal.pending, 0);
+  const saleRow = (r: (typeof list)[number]) => (
+    <li key={r.s.id}>
+      <a className="item" href={`#/ventas/${r.s.id}`}>
+        <span className="item-main">
+          <span className="item-title" style={{ display: 'block' }}>
+            {r.names.join(', ') || 'Venta'}
+          </span>
+          <span className="item-sub" style={{ display: 'block' }}>
+            {formatDateTime(r.s.date)} · {r.units} u. · {r.inv}
+            {r.customer ? ` · ${r.customer}` : ''}
+          </span>
+        </span>
+        <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
+          <span className="money strong">{formatCOP(r.s.total)}</span>
+          <PaymentBadge status={r.bal.status as PaymentStatus} />
+        </span>
+      </a>
+    </li>
+  );
   return (
     <>
       <Chips label="Filtro" value={filter} onChange={setFilter} options={[['all', 'Todas'], ['pending', `Por cobrar (${formatCOP(pendingTotal)})`], ['voided', 'Anuladas']]} />
       <TextInput type="search" placeholder="Buscar producto o comprador" aria-label="Buscar ventas" value={q} onChange={(e) => setQ(e.target.value)} />
-      <Card flush>
-        {!data ? (
+      {!data ? (
+        <Card flush>
           <Loading />
-        ) : (
-          <Paged
-            items={list}
-            empty={<Empty icon="tag" title="No hay ventas" />}
-            render={(r) => (
-              <li key={r.s.id}>
-                <a className="item" href={`#/ventas/${r.s.id}`}>
-                  <span className="item-main">
-                    <span className="item-title" style={{ display: 'block' }}>
-                      {r.names.join(', ') || 'Venta'}
-                    </span>
-                    <span className="item-sub" style={{ display: 'block' }}>
-                      {formatDateTime(r.s.date)} · {r.units} u. · {r.inv}
-                      {r.customer ? ` · ${r.customer}` : ''}
-                    </span>
-                  </span>
-                  <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
-                    <span className="money strong">{formatCOP(r.s.total)}</span>
-                    <PaymentBadge status={r.bal.status as PaymentStatus} />
-                  </span>
-                </a>
-              </li>
-            )}
-          />
-        )}
-      </Card>
+        </Card>
+      ) : view === 'categoria' ? (
+        <GroupedList
+          groups={groupBy(
+            list,
+            (r) => (r.s.status === 'voided' ? 'Anuladas' : r.bal.pending > 0 ? 'Por cobrar' : 'Pagadas'),
+            (r) => (r.s.status === 'voided' ? 0 : r.bal.pending > 0 ? r.bal.pending : r.s.total),
+            ['Por cobrar', 'Pagadas', 'Anuladas'],
+          )}
+          empty={
+            <Card flush>
+              <Empty icon="tag" title="No hay ventas" />
+            </Card>
+          }
+          render={saleRow}
+        />
+      ) : (
+        <Card flush>
+          <Paged items={list} empty={<Empty icon="tag" title="No hay ventas" />} render={saleRow} />
+        </Card>
+      )}
     </>
   );
 }
 
-function PurchasesList({ ids }: { ids: ID[] | null }) {
+function PurchasesList({ ids, view }: { ids: ID[] | null; view: View }) {
   const data = useLive(
     async (d) => {
       const ps = (await d.purchases.orderBy('date').reverse().toArray()).filter((p) => !ids || ids.includes(p.inventoryId));
@@ -139,40 +172,52 @@ function PurchasesList({ ids }: { ids: ID[] | null }) {
     },
     [JSON.stringify(ids)],
   );
-  return (
+  const purchaseRow = (r: NonNullable<typeof data>[number]) => (
+    <li key={r.p.id}>
+      <a className="item" href={`#/compras/${r.p.id}`}>
+        <span className="item-main">
+          <span className="item-title" style={{ display: 'block' }}>
+            {r.names.join(', ') || 'Compra'}
+          </span>
+          <span className="item-sub" style={{ display: 'block' }}>
+            {formatDateTime(r.p.date)} · {r.units} u. · {r.inv}
+            {r.supplier ? ` · ${r.supplier}` : ''}
+          </span>
+        </span>
+        <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
+          <span className="money strong">{formatCOP(r.p.total)}</span>
+          {r.p.status === 'voided' ? <Badge>⊘ Anulada</Badge> : null}
+        </span>
+      </a>
+    </li>
+  );
+  return !data ? (
     <Card flush>
-      {!data ? (
-        <Loading />
-      ) : (
-        <Paged
-          items={data}
-          empty={<Empty icon="cart" title="No hay compras" />}
-          render={(r) => (
-            <li key={r.p.id}>
-              <a className="item" href={`#/compras/${r.p.id}`}>
-                <span className="item-main">
-                  <span className="item-title" style={{ display: 'block' }}>
-                    {r.names.join(', ') || 'Compra'}
-                  </span>
-                  <span className="item-sub" style={{ display: 'block' }}>
-                    {formatDateTime(r.p.date)} · {r.units} u. · {r.inv}
-                    {r.supplier ? ` · ${r.supplier}` : ''}
-                  </span>
-                </span>
-                <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
-                  <span className="money strong">{formatCOP(r.p.total)}</span>
-                  {r.p.status === 'voided' ? <Badge>⊘ Anulada</Badge> : null}
-                </span>
-              </a>
-            </li>
-          )}
-        />
+      <Loading />
+    </Card>
+  ) : view === 'categoria' ? (
+    <GroupedList
+      groups={groupBy(
+        data,
+        (r) => r.supplier || 'Sin proveedor',
+        (r) => (r.p.status === 'voided' ? 0 : r.p.total),
+        undefined,
       )}
+      empty={
+        <Card flush>
+          <Empty icon="cart" title="No hay compras" />
+        </Card>
+      }
+      render={purchaseRow}
+    />
+  ) : (
+    <Card flush>
+      <Paged items={data} empty={<Empty icon="cart" title="No hay compras" />} render={purchaseRow} />
     </Card>
   );
 }
 
-function ExpensesList({ ids }: { ids: ID[] | null }) {
+function ExpensesList({ ids, view }: { ids: ID[] | null; view: View }) {
   const data = useLive(
     async (d) => {
       const es = (await d.expenses.orderBy('date').reverse().toArray()).filter((e) => !ids || (e.inventoryId !== null && ids.includes(e.inventoryId)));
@@ -202,42 +247,56 @@ function ExpensesList({ ids }: { ids: ID[] | null }) {
     },
     [JSON.stringify(ids)],
   );
+  const expenseRow = ({ e, inv, total, purchases }: NonNullable<typeof data>[number]) => (
+    <li key={e.id}>
+      <a className="item" href={e.costGroupId && e.purchaseId ? `#/compras/${e.purchaseId}` : `#/gastos/${e.id}`}>
+        <span className="item-main">
+          <span className="item-title" style={{ display: 'block' }}>
+            {e.category}
+            {e.notes ? <span className="muted small"> · {e.notes}</span> : null}
+          </span>
+          <span className="item-sub" style={{ display: 'block' }}>
+            {formatDateTime(e.date)} · {inv}
+            {e.costGroupId ? (purchases > 1 ? ` · repartido entre ${purchases} compras` : ' · gasto de una compra') : e.treatment === 'capitalized' ? ' · al costo' : ''}
+          </span>
+        </span>
+        <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
+          <span className="money strong">{formatCOP(total)}</span>
+          {e.status === 'voided' ? <Badge>⊘ Anulado</Badge> : null}
+        </span>
+      </a>
+    </li>
+  );
   return (
     <>
       {ids ? <p className="small muted">Se muestran los gastos asignados a estos inventarios. Los gastos generales aparecen en "Todos los inventarios".</p> : null}
       <a className="small" href="#/personal">
         Ver tus gastos personales (gustos, gastos hormiga…) →
       </a>
-      <Card flush>
-        {!data ? (
+      {!data ? (
+        <Card flush>
           <Loading />
-        ) : (
-          <Paged
-            items={data}
-            empty={<Empty icon="receipt" title="No hay gastos" />}
-            render={({ e, inv, total, purchases }) => (
-              <li key={e.id}>
-                <a className="item" href={e.costGroupId && e.purchaseId ? `#/compras/${e.purchaseId}` : `#/gastos/${e.id}`}>
-                  <span className="item-main">
-                    <span className="item-title" style={{ display: 'block' }}>
-                      {e.category}
-                      {e.notes ? <span className="muted small"> · {e.notes}</span> : null}
-                    </span>
-                    <span className="item-sub" style={{ display: 'block' }}>
-                      {formatDateTime(e.date)} · {inv}
-                      {e.costGroupId ? (purchases > 1 ? ` · repartido entre ${purchases} compras` : ' · gasto de una compra') : e.treatment === 'capitalized' ? ' · al costo' : ''}
-                    </span>
-                  </span>
-                  <span className="item-side stack-sm" style={{ alignItems: 'flex-end' }}>
-                    <span className="money strong">{formatCOP(total)}</span>
-                    {e.status === 'voided' ? <Badge>⊘ Anulado</Badge> : null}
-                  </span>
-                </a>
-              </li>
-            )}
-          />
-        )}
-      </Card>
+        </Card>
+      ) : view === 'categoria' ? (
+        <GroupedList
+          groups={groupBy(
+            data,
+            (r) => r.e.category || 'Otros',
+            (r) => (r.e.status === 'voided' ? 0 : r.total),
+            EXPENSE_CATEGORIES,
+          )}
+          empty={
+            <Card flush>
+              <Empty icon="receipt" title="No hay gastos" />
+            </Card>
+          }
+          render={expenseRow}
+        />
+      ) : (
+        <Card flush>
+          <Paged items={data} empty={<Empty icon="receipt" title="No hay gastos" />} render={expenseRow} />
+        </Card>
+      )}
     </>
   );
 }
