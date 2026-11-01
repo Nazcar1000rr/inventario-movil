@@ -26,8 +26,8 @@ App en español para llevar el inventario de un negocio de teléfonos (sobre tod
 | Interfaz | ✅ 37 pruebas de extremo a extremo en Chromium, todas aprobadas |
 | Conversión automática de los datos de la v1 | ✅ Probada con una base real de la v1 (en la capa de datos y en el navegador) y con respaldos de la v1 |
 | Conversión automática de los datos de la v2 (lotes) | ✅ Probada con una base real de la v2 y con respaldos de la v2 (en la capa de datos, con el mismo código Dexie de la app) |
-| PWA publicada en HTTPS | ✅ Versión 2.4.0 (versión completa): el flujo de GitHub Pages terminó bien (ejecución 21). La dirección en vivo no se pudo abrir desde donde se publicó, así que **no** se comprobó a mano que sirva la compilación c9a7abd78432; ábrela y mira Ayuda → versión 2.4.0 |
-| APK de Android | ✅ Versión 2.4.0 (compilación 12) compilada y firmada en GitHub Actions y publicada en *Releases* (v2.4.0-12). Comprobado: firmado con la misma clave de siempre (SHA-256 16554A00…433C972, se puede instalar encima) y trae la compilación c9a7abd78432. Los permisos no se volvieron a revisar (no cambiaron los plugins). **No se instaló en un teléfono real** |
+| PWA publicada en HTTPS | ✅ Versión 2.4.0 (versión completa): el flujo de GitHub Pages terminó bien (ejecución 23). La dirección en vivo no se pudo abrir desde donde se publicó, así que **no** se comprobó a mano que sirva la compilación 48e89c02e315; ábrela y mira Ayuda → versión 2.4.0 |
+| APK de Android | ✅ Versión 2.4.0 (compilación 13) compilada y firmada en GitHub Actions y publicada en *Releases* (v2.4.0-13). Comprobado: firmado con la misma clave de siempre (SHA-256 16554A00…433C972, se puede instalar encima) y trae la compilación 48e89c02e315. Los permisos no se volvieron a revisar (no cambiaron los plugins). **No se instaló en un teléfono real** |
 | Clave de firma del APK | Entregada **por separado** (no está en el código) |
 | Pruebas en iPhone o Android físicos, o en Safari | ⛔ **No realizadas** (no hay dispositivos ni Safari/WebKit en este entorno): tampoco las notificaciones reales, abrir WhatsApp ni el calendario del iPhone. Ver la lista de verificación en docs/PRUEBAS.md |
 
