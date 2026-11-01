@@ -57,6 +57,24 @@ function write(key: string, v: string | null) {
 
 const isPack = (v: string | null): v is PackId => !!v && PACKS.some((p) => p.id === v);
 
+/**
+ * v2.4: interruptor general. En un iPhone que no deja mezclar el sonido de la app con la música (sin Audio Session
+ * API), el sonido pausa Spotify: ahí empieza apagado y se puede prender a mano. En los demás empieza prendido.
+ */
+function onIPhone(): boolean {
+  return typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+export function getAllSounds(): boolean {
+  const v = read('sound:all');
+  if (v === '1') return true;
+  if (v === '0') return false;
+  return !(onIPhone() && !audioSession());
+}
+export function setAllSounds(on: boolean): void {
+  write('sound:all', on ? '1' : '0');
+  if (!on) dropCtx();
+  emit();
+}
 export function isSoundOn(name: SoundName): boolean {
   return read(`sound:${name}`) !== '0';
 }
@@ -139,6 +157,7 @@ export function useSoundPrefs(): {
   pack: PackId;
   volume: number;
   ignoreSilent: boolean;
+  all: boolean;
 } {
   useSyncExternalStore(
     (cb) => {
@@ -153,7 +172,7 @@ export function useSoundPrefs(): {
     on[s.id] = isSoundOn(s.id);
     tone[s.id] = getToneOverride(s.id);
   }
-  return { on, tone, pack: getPack(), volume: getVolume(), ignoreSilent: getIgnoreSilent() };
+  return { on, tone, pack: getPack(), volume: getVolume(), ignoreSilent: getIgnoreSilent(), all: getAllSounds() };
 }
 
 /* ---------------- Síntesis ---------------- */
@@ -464,7 +483,7 @@ function schedule(ac: AudioContext, master: GainNode, n: Note, now: number) {
 
 /** Reproduce un sonido con su tono (o con el paquete indicado, para "probar"). */
 export function playSound(name: SoundName, opts: { pack?: PackId; force?: boolean } = {}): void {
-  if (!opts.force && !isSoundOn(name)) return;
+  if (!opts.force && (!getAllSounds() || !isSoundOn(name))) return;
   const vol = getVolume();
   const pack = opts.pack ?? toneFor(name);
   recentSounds.push(pack === 'suave' ? name : `${name}:${pack}`);

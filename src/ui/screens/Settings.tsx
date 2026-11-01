@@ -10,7 +10,7 @@ import { MORE_GROUPS } from '../menu';
 import { useBusiness, visibleMore } from '../features';
 import { BusinessCard } from './Business';
 import { db, useAction, useLive } from '../store';
-import { canIgnoreSilentSwitch, PACKS, playSound, setIgnoreSilent, setPack, setSoundOn, setToneOverride, setVolume, SOUNDS, useSoundPrefs, type PackId } from '../sound';
+import { canIgnoreSilentSwitch, PACKS, playSound, setAllSounds, setIgnoreSilent, setPack, setSoundOn, setToneOverride, setVolume, SOUNDS, useSoundPrefs, type PackId } from '../sound';
 
 declare const __APP_VERSION__: string;
 
@@ -306,6 +306,17 @@ export function SoundsCard() {
   return (
     <Card title="Sonidos">
       <div className="stack" data-testid="sounds-card">
+        <label className="check" style={{ alignItems: 'flex-start' }}>
+          <input type="checkbox" checked={prefs.all} onChange={(e) => setAllSounds(e.target.checked)} data-testid="sounds-all" data-sound="none" />
+          <span>
+            <span className="strong" style={{ display: 'block' }}>Sonidos de la app</span>
+            <span className="tiny muted">
+              {isIOS() && !canIgnoreSilentSwitch()
+                ? 'Tu iPhone no deja mezclar el sonido de la app con tu música: si lo prendes, la música se puede pausar. Por eso empieza apagado.'
+                : 'Apágalos todos de una vez si no quieres que la app suene. Con Spotify o YouTube sonando, la app los mezcla y no los pausa.'}
+            </span>
+          </span>
+        </label>
         <Field label="Paquete de sonidos" hint={PACKS.find((p) => p.id === prefs.pack)?.hint}>
           <div className="chips" role="group" aria-label="Paquete de sonidos" data-sound="none">
             {PACKS.map((p) => (

@@ -112,6 +112,7 @@ function VoiceCard() {
             <label className="check">
               <input type="checkbox" checked={!sp.muted} onChange={(e) => setMuted(!e.target.checked)} data-testid="voice-auto" /> Leer en voz alta los recorridos, explicaciones ⓘ, ayuda y lecciones
             </label>
+            {/iPad|iPhone|iPod/.test(navigator.userAgent) ? <p className="tiny muted">En iPhone la voz del sistema pausa tu música mientras lee y no se puede evitar. Por eso empieza apagada.</p> : null}
             <p className="tiny muted">También puedes silenciarla o activarla con la bocina 🔊 / 🔇 que aparece en esas pantallas.</p>
             {sp.voices && sp.voices.length > 1 ? (
               <Field label="Voz" htmlFor="voice-id">

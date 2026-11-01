@@ -29,6 +29,8 @@ Entorno:
 
 **Prueba corregida (2.4):** `v23.spec.ts` (calendario) fallaba el último día del mes porque «mañana» caía en el mes siguiente y la cuadrícula muestra el mes actual; ahora avanza de mes cuando hace falta. No era un fallo de la app.
 
+**Ajuste posterior (música en iPhone):** interruptor general «Sonidos de la app» y, en iPhone, la voz empieza apagada (la voz del sistema pausa la música); si el iPhone no tiene la API de sesión de audio, los sonidos también empiezan apagados. E2E con un iPhone simulado: arrancan apagados y se prenden a mano. **No se pudo comprobar en un iPhone real** si con esto la música deja de pausarse.
+
 **No probado aquí (2.4):** teléfono físico y Safari (igual que la 2.3). En especial **no se probó en un teléfono real** que el audio ya no pause Spotify o una llamada, ni la lectura en voz alta (puede seguir bajando la música), ni compartir comprobantes o el Excel desde el menú del sistema, ni abrir el Excel en Microsoft Excel. La publicación (CI, Pages y firma del APK) se verifica aparte, ver README.
 
 ## Versión 2.3: qué se probó

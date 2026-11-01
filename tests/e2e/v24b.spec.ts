@@ -152,3 +152,24 @@ test('v2.4: bienvenida por tipo de negocio', async ({ page }) => {
   await expect(page.getByRole('link', { name: /Catálogo de modelos/ })).toHaveCount(0);
   await expect(page.getByRole('link', { name: /Cotizaciones/ })).toHaveCount(0);
 });
+
+test('v2.4: en iPhone sin mezcla de audio, sonidos y voz empiezan apagados (no pausan la música)', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Mobile/15E148 Safari/604.1',
+    viewport: { width: 390, height: 844 },
+    locale: 'es-CO',
+  });
+  const page = await ctx.newPage();
+  await page.addInitScript(() => {
+    try {
+      delete (Navigator.prototype as unknown as { audioSession?: unknown }).audioSession;
+    } catch {
+      /* ya no existe */
+    }
+  });
+  await page.goto('/#/apariencia');
+  await expect(page.getByTestId('sounds-all')).not.toBeChecked();
+  await page.getByTestId('sounds-all').click();
+  await expect(page.getByTestId('sounds-all')).toBeChecked();
+  await ctx.close();
+});

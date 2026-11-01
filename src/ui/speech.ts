@@ -46,7 +46,11 @@ function write(key: string, v: string) {
 }
 
 export function isMuted(): boolean {
-  return read('voice:muted') === '1';
+  const v = read('voice:muted');
+  if (v === '1') return true;
+  if (v === '0') return false;
+  // v2.4: en iPhone la voz del sistema pausa la música (Spotify) y no se puede evitar: empieza apagada
+  return typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 }
 export function setMuted(m: boolean): void {
   write('voice:muted', m ? '1' : '0');
